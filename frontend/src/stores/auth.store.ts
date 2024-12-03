@@ -25,6 +25,7 @@ interface AuthState {
   clearError: () => void;
   isAuthenticated: () => boolean;
   updateBenefits: () => Promise<void>;
+  updateUser: (user: User) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -35,6 +36,10 @@ export const useAuthStore = create<AuthState>()(
       benefits: null,
       isLoading: false,
       error: null,
+
+      updateUser: (user: User) => {
+        set({ user });
+      },
 
       isAuthenticated: () => {
         const state = get();
@@ -62,19 +67,17 @@ export const useAuthStore = create<AuthState>()(
           const response = await authService.login(credentials);
           const { user, token, refreshToken } = response.data!;
           
-          // First set the auth state
           set({
             user,
             token: {
               accessToken: token,
               refreshToken,
-              expiresIn: 7 * 24 * 3600 // 7 days in seconds
+              expiresIn: 7 * 24 * 3600
             },
             isLoading: false,
             error: null
           });
 
-          // Then fetch benefits after token is set
           const benefits = await authService.getUserBenefits();
           set({ benefits });
         } catch (error) {
@@ -92,19 +95,17 @@ export const useAuthStore = create<AuthState>()(
           const response = await authService.loginWithCode(data);
           const { user, token, refreshToken } = response.data!;
           
-          // First set the auth state
           set({
             user,
             token: {
               accessToken: token,
               refreshToken,
-              expiresIn: 7 * 24 * 3600 // 7 days in seconds
+              expiresIn: 7 * 24 * 3600
             },
             isLoading: false,
             error: null
           });
 
-          // Then fetch benefits after token is set
           const benefits = await authService.getUserBenefits();
           set({ benefits });
         } catch (error) {
@@ -122,19 +123,17 @@ export const useAuthStore = create<AuthState>()(
           const response = await authService.register(data);
           const { user, token, refreshToken } = response.data!;
 
-          // First set the auth state
           set({
             user,
             token: {
               accessToken: token,
               refreshToken,
-              expiresIn: 7 * 24 * 3600 // 7 days in seconds
+              expiresIn: 7 * 24 * 3600
             },
             isLoading: false,
             error: null
           });
 
-          // Then fetch benefits after token is set
           const benefits = await authService.getUserBenefits();
           set({ benefits });
         } catch (error) {
@@ -172,5 +171,3 @@ export const useAuthStore = create<AuthState>()(
     }
   )
 );
-
-export default useAuthStore;

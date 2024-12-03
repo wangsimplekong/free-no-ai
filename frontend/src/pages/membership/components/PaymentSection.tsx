@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
-import { QrCode, CreditCard, Loader2 } from 'lucide-react';
+import { QrCode, CreditCard, Loader2, ArrowUpRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { MemberPlan } from '../../../types/member.types';
+import type { UserBenefits } from '../../../types/auth.types';
 import { orderService } from '../../../services/order.service';
+import { calculateUpgradePrice, formatPrice, isPlanUpgradable } from '../../../utils/plan.utils';
 
 interface PaymentSectionProps {
   selectedPlan: MemberPlan;
+  currentPlan: UserBenefits['membership'] | null;
   onClose: () => void;
 }
 
@@ -13,12 +16,18 @@ type PaymentMethodType = 'wechat' | 'alipay' | 'paypal';
 
 export const PaymentSection: React.FC<PaymentSectionProps> = ({
   selectedPlan,
+  currentPlan,
   onClose
 }) => {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodType>('wechat');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [payUrl, setPayUrl] = useState<string | null>(null);
+
+  const isUpgrade = currentPlan && isPlanUpgradable(currentPlan, selectedPlan);
+  const finalPrice = currentPlan 
+    ? calculateUpgradePrice(currentPlan, selectedPlan)
+    : selectedPlan.price;
 
   const getPayType = (method: PaymentMethodType): number => {
     switch (method) {
@@ -38,15 +47,13 @@ export const PaymentSection: React.FC<PaymentSectionProps> = ({
 
       const response = await orderService.createOrder({
         plan_id: selectedPlan.id,
-        pay_type: getPayType(paymentMethod)
+        pay_type: getPayType(paymentMethod),
+        upgrade_from: currentPlan ? currentPlan.planName : undefined
       });
 
-      // Show success message and close modal
+      setPayUrl(response.data.pay_url);
       toast.success('订单创建成功！');
-      onClose();
-      
     } catch (err) {
-      // Set error state instead of showing toast
       setError(err instanceof Error ? err.message : '创建订单失败，请重试');
     } finally {
       setIsLoading(false);
@@ -69,13 +76,27 @@ export const PaymentSection: React.FC<PaymentSectionProps> = ({
         <div className="space-y-6">
           {/* Order Summary */}
           <div className="bg-gray-50 rounded-lg p-4">
+            {isUpgrade && (
+              <div className="mb-3 flex items-center text-blue-600 text-sm font-medium">
+                <ArrowUpRight className="w-4 h-4 mr-1" />
+                升级订单
+              </div>
+            )}
             <div className="flex justify-between mb-2">
               <span className="text-gray-600">套餐名称</span>
               <span className="font-medium">{selectedPlan.name}</span>
             </div>
+            {currentPlan && (
+              <div className="flex justify-between mb-2">
+                <span className="text-gray-600">当前套餐</span>
+                <span className="font-medium">{currentPlan.planName}</span>
+              </div>
+            )}
             <div className="flex justify-between mb-2">
-              <span className="text-gray-600">支付金额</span>
-              <span className="font-medium text-lg">¥{selectedPlan.price}</span>
+              <span className="text-gray-600">
+                {isUpgrade ? '补差价金额' : '支付金额'}
+              </span>
+              <span className="font-medium text-lg">¥{formatPrice(finalPrice)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">有效期限</span>
@@ -83,6 +104,11 @@ export const PaymentSection: React.FC<PaymentSectionProps> = ({
                 {selectedPlan.period_type === 1 ? '1个月' : '12个月'}
               </span>
             </div>
+            {isUpgrade && (
+              <div className="mt-3 text-sm text-gray-500">
+                *升级费用已按剩余时间自动计算差价
+              </div>
+            )}
           </div>
 
           {error && (
@@ -172,7 +198,9 @@ export const PaymentSection: React.FC<PaymentSectionProps> = ({
                   <span>处理中...</span>
                 </>
               ) : (
-                <span>确认下单</span>
+                <span>
+                  {isUpgrade ? '确认升级' : '确认支付'} ¥{formatPrice(finalPrice)}
+                </span>
               )}
             </button>
           </div>

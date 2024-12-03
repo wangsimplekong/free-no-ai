@@ -1,4 +1,3 @@
-// Common Types
 export interface User {
   id: string;
   username: string;
@@ -16,9 +15,13 @@ export interface TokenInfo {
 export interface UserBenefits {
   membership: {
     planName: string;
+    planId: string;
     level: number;
     expireTime: string;
+    createdTime: string;
     status: number;
+    price: number;
+    period_type: 1 | 2;
   };
   quotas: {
     detection: {
@@ -51,7 +54,6 @@ export interface AuthResponse {
   timestamp: number;
 }
 
-// Register Types
 export interface RegisterRequest {
   username: string;
   password: string;
@@ -59,7 +61,6 @@ export interface RegisterRequest {
   register_source: RegisterSource;
 }
 
-// Login Types
 export interface LoginRequest {
   username: string;
   password: string;
@@ -70,10 +71,10 @@ export interface LoginWithCodeRequest {
   code: string;
 }
 
-// Verification Types
 export enum VerificationType {
   SMS = 'SMS',
-  EMAIL = 'EMAIL'
+  EMAIL = 'EMAIL',
+  WECHAT = 'WECHAT'
 }
 
 export enum RegisterSource {
@@ -95,7 +96,6 @@ export interface VerificationRequest {
   purpose: VerificationPurpose;
 }
 
-// Error Response Type
 export interface ErrorResponse {
   code: number;
   message: string;

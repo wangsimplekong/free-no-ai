@@ -140,6 +140,40 @@ export class VerificationService {
       return false;
     }
   }
+
+  async clearVerificationCode(
+    recipient: string,
+    type: VerifyType,
+    purpose: VerifyBusinessType
+  ): Promise<void> {
+    try {
+      logger.info('Clearing verification code', {
+        recipient,
+        type,
+        purpose,
+        timestamp: new Date().toISOString()
+      });
+
+      const redis = await RedisManager.getInstance();
+      const redisKey = this.generateRedisKey(recipient, type, purpose);
+
+      await redis.del(redisKey);
+
+      logger.info('Verification code cleared successfully', {
+        recipient,
+        type,
+        purpose
+      });
+    } catch (error) {
+      logger.error('Failed to clear verification code', {
+        error,
+        recipient,
+        type,
+        purpose
+      });
+      throw error;
+    }
+  }
 }
 
 export default new VerificationService();

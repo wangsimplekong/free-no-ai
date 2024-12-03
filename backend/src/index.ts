@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import { config } from './config';
 import { logger } from './utils/logger';
 import { authRoutes } from './routes/auth.routes';
+import { userRoutes } from './routes/user.routes';
 import { detectionRoutes } from './routes/detection.routes';
 import { reductionRoutes } from './routes/reduction.routes';
 import { aigcRoutes } from './routes/aigc.routes';
@@ -27,12 +28,13 @@ app.use(requestLoggerMiddleware());
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/user', userRoutes);
 app.use('/api/v1/detection', detectionRoutes);
 app.use('/api/v1/reduction', reductionRoutes);
 app.use('/api/v1/aigc', aigcRoutes);
 app.use('/api/member', memberRoutes);
 app.use('/api/orders', orderRoutes);
-app.use('/api/payment', paymentRoutes);  // Changed from payments to payment to match the route
+app.use('/api/payment', paymentRoutes);
 app.use('/api/benefits', benefitsRoutes);
 
 // Health check endpoint

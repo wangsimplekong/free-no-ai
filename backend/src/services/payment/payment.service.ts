@@ -2,24 +2,149 @@ import { createHttpClient } from '../../utils/http.util';
 import { logger } from '../../utils/logger';
 import { paymentConfig } from '../../config/payment.config';
 import { SignatureUtil } from '../../utils/payment/signature.util';
-import { PaymentCache } from './payment.cache';
-import { OrderCache } from './order.cache';
+import { OrderRepository } from '../../repositories/order/order.repository';
+import { PaymentRepository } from '../../repositories/order/payment.repository';
 import { supabase } from '../../config/database';
 import type {
   PaymentRequest,
   PaymentResponse,
   PaymentCallback,
-  PaymentResult,
   PaymentStatus,
 } from '../../types/payment.types';
 
 export class PaymentService {
   private httpClient;
-  private paymentCache = new PaymentCache();
-  private orderCache = new OrderCache();
+  private orderRepository: OrderRepository;
+  private paymentRepository: PaymentRepository;
 
   constructor() {
     this.httpClient = createHttpClient(paymentConfig.gateway.url);
+    this.orderRepository = new OrderRepository();
+    this.paymentRepository = new PaymentRepository();
+  }
+
+  async createPayment(params: PaymentRequest): Promise<PaymentResponse> {
+    try {
+      // 记录请求参数
+      logger.info('Creating payment request: ' + JSON.stringify(params));
+
+      // 1. 构造支付参数
+      const payParams = {
+        order_id: params.orderId,
+        product_name: params.subject,
+        product_desc: params.body,
+        pay_amount: params.amount
+      };
+
+
+      // 2. 生成签名
+      const sign = SignatureUtil.generate(payParams, paymentConfig.gateway.appSecret);
+
+      logger.info('Payment parameters:'+  JSON.stringify(payParams) +"; sign:"+ sign);
+      // 3. 拼接支付URL
+      const queryString = new URLSearchParams({
+        ...payParams,
+        appid: paymentConfig.gateway.appId,
+        callback: paymentConfig.gateway.notifyUrl,
+        sign
+      }).toString();
+      
+      const payUrl = `${paymentConfig.gateway.url}?${queryString}`;
+
+      // 4. 创建支付记录
+      const paymentData = {
+        order_id: params.orderId,
+        amount: params.amount,
+        status: 1, // 处理中
+        pay_type: params.payType || 1, // 默认支付类型
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      logger.info('Creating payment record with data: ' + JSON.stringify(paymentData));
+
+      const payment = await this.paymentRepository.create(paymentData).catch(error => {
+        logger.error('Payment record creation failed: ' + (error?.message || error) + 
+          ', stack: ' + error?.stack + 
+          ', data: ' + JSON.stringify(paymentData));
+        throw new Error(`支付记录创建失败: ${error?.message || '未知错误'}`);
+      });
+
+      // 5. 构造返回结果
+      const result = {
+        payUrl,
+        qrCode: payUrl,
+        orderId: params.orderId,
+        orderNo: params.orderNo,
+        amount: params.amount,
+        expireTime: new Date(
+          Date.now() + paymentConfig.order.expireTime * 1000
+        ).toISOString()
+      };
+
+      logger.info('Payment created successfully: ' + JSON.stringify(result));
+
+      return result;
+    } catch (error) {
+      logger.error('Create payment failed: ' + (error?.message || error) + 
+        ', stack: ' + error?.stack + 
+        ', params: ' + JSON.stringify(params) + 
+        ', context: PaymentService.createPayment');
+      
+      throw new Error(error?.message || '支付创建失败，请稍后重试');
+    }
+  }
+
+  async handleCallback(params: PaymentCallback): Promise<void> {
+    try {
+      // 1. 验证签名时,只使用与签名生成时相同的参数
+      const verifyParams = {
+        order_id: params.order_id, 
+        product_name: params.product_name,
+        product_desc: params.product_desc,
+        pay_amount: params.pay_amount 
+      };
+      logger.info('handleCallback verifyParams parameters:'+  JSON.stringify(verifyParams) +"; sign:"+ params.sign);
+
+      if (!SignatureUtil.verify(verifyParams, params.sign, paymentConfig.gateway.appSecret)) {
+        throw new Error('Invalid signature');
+      }
+
+      // 2. 更新支付记录
+      await this.paymentRepository.update(params.order_id, {
+        trade_no: params.trade_no,
+        status: params.pay_status === '0' ? 2 : 3, // 2-成功，3-失败
+        callback_data: params,
+        updated_at: new Date().toISOString()
+      });
+
+      // 3. 如果支付成功，执行后续业务逻辑
+      if (params.pay_status === '0') {
+        try {
+          await this.completePayment(params.order_id);
+        } catch (error) {
+          logger.error('Complete payment process failed: ' + (error?.message || error) + 
+            ', orderId: ' + params.order_id + 
+            ', context: PaymentService.handleCallback.completePayment');
+          // 这里选择记录错误但不抛出，避免影响支付回调的响应
+          // 可以考虑添加重试机制或通知管理员手动处理
+        }
+      } else {
+        // 支付失败，更新订单状态-失败 
+        await this.orderRepository.updateStatus(params.order_id,  3    );
+      }
+
+      logger.info('Payment callback processed: ' + 
+        'orderNo: ' + params.order_id + 
+        ', status: ' + params.pay_status + 
+        ', tradeNo: ' + params.trade_no);
+    } catch (error) {
+      logger.error('Payment callback failed: ' + (error?.message || error) + 
+        ', stack: ' + error?.stack + 
+        ', params: ' + JSON.stringify(params) + 
+        ', context: PaymentService.handleCallback');
+      throw error;
+    }
   }
 
   async completePayment(orderId: string): Promise<{ success: boolean }> {
@@ -60,6 +185,7 @@ export class PaymentService {
         .from('t_order')
         .update({
           status: 2,
+          pay_time: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
         .eq('id', orderId);
@@ -120,165 +246,16 @@ export class PaymentService {
         throw new Error('Failed to update rewrite quota');
       }
 
-      logger.info('Payment completed successfully', {
-        orderId,
-        userId: order.user_id,
-        planId: plan.id
-      });
+      logger.info('Payment completed successfully: ' + 
+        'orderId: ' + orderId + 
+        ', userId: ' + order.user_id + 
+        ', planId: ' + plan.id);
 
       return { success: true };
     } catch (error) {
-      logger.error('Complete payment failed:', error);
+      logger.error('Complete payment failed: ' + error);
       throw error;
     }
   }
 
-  async createPayment(params: PaymentRequest): Promise<PaymentResponse> {
-    try {
-      logger.info('Creating payment request', {
-        orderId: params.orderId,
-        amount: params.amount,
-        userId: params.userId,
-      });
-
-      const payParams = {
-        order_id: params.orderNo,
-        appid: paymentConfig.gateway.appId,
-        product_name: params.subject,
-        product_desc: params.body,
-        pay_amount: params.amount,
-        callback: paymentConfig.gateway.notifyUrl,
-      };
-
-      const sign = SignatureUtil.generate(
-        payParams,
-        paymentConfig.gateway.appSecret
-      );
-
-      const response = await this.httpClient.post(paymentConfig.gateway.url, {
-        ...payParams,
-        sign,
-      });
-
-      if (!response.data.code_url) {
-        logger.error('Failed to get payment URL', { response });
-        throw new Error('支付链接生成失败');
-      }
-
-      const result = {
-        payUrl: response.data.code_url,
-        qrCode: response.data.code_url,
-        orderId: params.orderId,
-        orderNo: params.orderNo,
-        amount: params.amount,
-        expireTime: new Date(
-          Date.now() + paymentConfig.order.expireTime * 1000
-        ).toISOString(),
-      };
-
-      await this.orderCache.cacheOrder({
-        ...params,
-        payUrl: result.payUrl,
-        expireTime: result.expireTime,
-      });
-
-      logger.info('Payment request created successfully', {
-        orderId: params.orderId,
-        payUrl: result.payUrl,
-      });
-
-      return result;
-    } catch (error) {
-      logger.error('Create payment failed:', error);
-      throw error;
-    }
-  }
-
-  async handleCallback(params: PaymentCallback): Promise<PaymentResult> {
-    try {
-      logger.info('Received payment callback', {
-        orderId: params.order_id,
-        status: params.trade_status,
-      });
-
-      const isValid = SignatureUtil.verify(
-        params,
-        params.sign,
-        paymentConfig.gateway.appSecret
-      );
-
-      if (!isValid) {
-        logger.error('Invalid payment callback signature', { params });
-        throw new Error('无效的支付回调签名');
-      }
-
-      const result = {
-        success: params.trade_status === 'SUCCESS',
-        orderId: params.order_id,
-        tradeNo: params.trade_no,
-        errorMessage:
-          params.trade_status === 'SUCCESS' ? undefined : '支付失败',
-      };
-
-      await this.paymentCache.cachePaymentResult(params.order_id, result);
-
-      logger.info('Payment callback processed', {
-        orderId: params.order_id,
-        success: result.success,
-      });
-
-      return result;
-    } catch (error) {
-      logger.error('Handle payment callback failed:', error);
-      throw error;
-    }
-  }
-
-  async getPaymentStatus(orderNo: string): Promise<PaymentStatus> {
-    try {
-      const cachedResult = await this.paymentCache.getPaymentResult(orderNo);
-      if (cachedResult) {
-        return {
-          status: cachedResult.success ? 'SUCCESS' : 'FAILED',
-          orderNo,
-          message: cachedResult.errorMessage,
-        };
-      }
-
-      const order = await this.orderCache.getOrder(orderNo);
-      if (!order) {
-        throw new Error('订单不存在');
-      }
-
-      if (new Date(order.expireTime) < new Date()) {
-        return {
-          status: 'EXPIRED',
-          orderNo,
-          message: '支付链接已过期',
-        };
-      }
-
-      return {
-        status: 'PENDING',
-        orderNo,
-      };
-    } catch (error) {
-      logger.error('Get payment status failed:', error);
-      throw error;
-    }
-  }
-
-  async refreshPaymentUrl(orderId: string): Promise<PaymentResponse> {
-    try {
-      const order = await this.orderCache.getOrder(orderId);
-      if (!order) {
-        throw new Error('订单不存在');
-      }
-
-      return await this.createPayment(order);
-    } catch (error) {
-      logger.error('Refresh payment URL failed:', error);
-      throw error;
-    }
-  }
 }

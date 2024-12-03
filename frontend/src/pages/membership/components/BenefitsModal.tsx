@@ -25,24 +25,31 @@ export const BenefitsModal: React.FC<BenefitsModalProps> = ({ isOpen, onClose })
     });
   };
 
-  const formatQuota = (quota: { total: number; used: number; remaining: number }) => {
+  const formatQuota = (quota?: { total: number; used: number; remaining: number }) => {
+    if (!quota) {
+      return {
+        total: '0',
+        used: `${0}字`,
+        remaining: '0'
+      }
+    }
     if (quota.total === 0) {
       return {
         total: '不限',
-        used: '-',
+        used: `${quota.used}字`,
         remaining: '不限'
       };
     }
 
     return {
       total: `${formatNumber(quota.total)}字`,
-      used: `${formatNumber(quota.used)}字`,
+      used: `${quota.used}字`,
       remaining: `${formatNumber(quota.remaining)}字`
     };
   };
 
-  const detectionQuota = formatQuota(benefits?.quotas.detection || { total: 0, used: 0, remaining: 0 });
-  const rewriteQuota = formatQuota(benefits?.quotas.rewrite || { total: 0, used: 0, remaining: 0 });
+  const detectionQuota = formatQuota(benefits?.quotas.detection);
+  const rewriteQuota = formatQuota(benefits?.quotas.rewrite);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="我的权益">
@@ -51,12 +58,12 @@ export const BenefitsModal: React.FC<BenefitsModalProps> = ({ isOpen, onClose })
         <div className="bg-blue-50 rounded-lg p-4">
           <div className="flex justify-between items-center mb-2">
             <span className="text-gray-600">当前套餐</span>
-            <span className="font-medium">{benefits?.membership.planName}</span>
+            <span className="font-medium">{benefits ? benefits?.membership.planName : '基础会员'}</span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-gray-600">到期时间</span>
             <span className="text-sm text-gray-500">
-              {formatDate(benefits?.membership.expireTime || '')}
+              {benefits ? formatDate(benefits?.membership.expireTime || '-') : '-'}
             </span>
           </div>
         </div>

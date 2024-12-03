@@ -11,6 +11,14 @@ export const authMiddleware = async (
 ): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
+    
+    // Special handling for logout endpoint
+    if (req.path === '/logout' && (!authHeader || !authHeader.startsWith('Bearer '))) {
+      (req as any).user = { id: null };
+      next();
+      return;
+    }
+
     if (!authHeader?.startsWith('Bearer ')) {
       res.status(401).json({
         code: 401,
@@ -35,6 +43,13 @@ export const authMiddleware = async (
     (req as any).user = { id: decoded.userId };
     next();
   } catch (error) {
+    // Special handling for logout endpoint
+    if (req.path === '/logout') {
+      (req as any).user = { id: null };
+      next();
+      return;
+    }
+
     logger.error('Auth middleware error:', {
       error,
       headers: req.headers,

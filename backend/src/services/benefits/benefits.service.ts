@@ -3,14 +3,16 @@ import { UserBenefits } from '../../types/benefits.types';
 import { logger } from '../../utils/logger';
 
 export class BenefitsService {
-  async getUserBenefits(userId: string): Promise<UserBenefits> {
+  async getUserBenefits(userId: string): Promise<UserBenefits | null> {
     try {
       // Get current membership info
       const { data: memberData, error: memberError } = await supabase
         .from('t_member')
         .select(`
           status,
+          plan_id,
           expire_time,
+          created_at,
           t_member_plan (
             name,
             level
@@ -22,6 +24,11 @@ export class BenefitsService {
 
       if (memberError && memberError.code !== 'PGRST116') {
         throw new Error('Failed to fetch membership data');
+      }
+
+      // If no membership data found, return null
+      if (!memberData) {
+        return null;
       }
 
       // Get quota information
@@ -51,8 +58,10 @@ export class BenefitsService {
 
       return {
         membership: {
+          planId: memberData?.plan_id,
           planName: memberData?.t_member_plan?.name || '未开通会员',
           level: memberData?.t_member_plan?.level || 0,
+          createdTime: memberData?.created_at,
           expireTime: memberData?.expire_time || new Date().toISOString(),
           status: memberData?.status || 0
         },

@@ -25,8 +25,10 @@ Retrieves the current user's membership benefits and quota information.
   "data": {
     "membership": {
       "planName": "Premium Plan",
+      "plan_id": "bbffda1b-3d18-40eb-953c-04423aaf3291",
       "level": 3,
       "expireTime": "2024-12-31T23:59:59Z",
+      "createdTime": "2024-12-03T00:44:24.515",
       "status": 1
     },
     "quotas": {
@@ -51,8 +53,10 @@ Retrieves the current user's membership benefits and quota information.
 **Response Fields:**
 - `membership`
   - `planName` (string): Name of the current membership plan
+  - `planId` (string): Id of the current membership plan
   - `level` (number): Plan level (0: No plan, 1: Basic, 2: Standard, 3: Premium)
   - `expireTime` (string): Plan expiration time in ISO 8601 format
+  - `createdTime` (string): Plan createdTime time in ISO 8601 format
   - `status` (number): Membership status (1: Active, 2: Expired, 3: Cancelled)
 - `quotas`
   - `detection`

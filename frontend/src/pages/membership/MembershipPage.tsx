@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { MembershipHeader } from './components/MembershipHeader';
 import { PlanTabs } from './components/PlanTabs';
-import { PlanCard } from './components/PlanCard';
+import { PlanCard } from '../../components/membership/PlanCard';
 import { PaymentSection } from './components/PaymentSection';
 import { BenefitsModal } from './components/BenefitsModal';
 import { useAuthCheck } from '../../hooks/useAuthCheck';
@@ -24,11 +24,46 @@ export const MembershipPage: React.FC = () => {
   const isAuthenticated = useAuthStore(state => state.isAuthenticated());
   const benefits = useAuthStore(state => state.benefits);
 
+  // Memoize current plan
+  const currentPlan = useMemo(() => {
+    if (!benefits?.membership || !plans.length) return null;
+    
+    const current = plans.find(plan => plan.id === benefits.membership.planId);
+    
+    if (current) {
+      return {
+        ...benefits.membership,
+        price: current.price,
+        period_type: current.period_type
+      };
+    }
+    return benefits.membership;
+  }, [benefits?.membership, plans]);
+
+  // Memoize filtered plans
+  const filteredPlans = useMemo(() => {
+    const periodType = activeTab === 'monthly' ? 1 : 2;
+    return plans
+      .filter(plan => plan.status === 1 && plan.period_type === periodType)
+      .sort((a, b) => a.level - b.level);
+  }, [plans, activeTab]);
+
+  // Memoize plan features formatter
+  const formatPlanFeatures = useMemo(() => (plan: MemberPlan) => [
+    { 
+      title: '检测字数', 
+      value: plan.detection_quota <= 0 ? '不限' : `${plan.detection_quota.toLocaleString()}字/${plan.period_type === 1 ? '月' : '年'}` 
+    },
+    { 
+      title: '降重字数', 
+      value: plan.rewrite_quota <= 0 ? '不限' : `${plan.rewrite_quota.toLocaleString()}字/${plan.period_type === 1 ? '月' : '年'}` 
+    }
+  ], []);
+
   useEffect(() => {
     fetchPlans();
   }, []);
 
-  // Handle authentication state changes
   useEffect(() => {
     if (isAuthenticated && pendingPlan) {
       setSelectedPlan(pendingPlan);
@@ -43,23 +78,12 @@ export const MembershipPage: React.FC = () => {
       const data = await memberService.getPlans();
       setPlans(data);
     } catch (err) {
-      setError('获取套餐信息失败，请稍后重试');
+      console.error('Failed to fetch plans:', err);
+      setError(err instanceof Error ? err.message : '获取套餐信息失败，请稍后重试');
     } finally {
       setLoading(false);
     }
   };
-
-  const getFilteredPlans = () => {
-    const periodType = activeTab === 'monthly' ? 1 : 2;
-    return plans
-      .filter(plan => plan.status === 1 && plan.period_type === periodType)
-      .sort((a, b) => a.level - b.level);
-  };
-
-  const formatFeatures = (plan: MemberPlan) => [
-    { title: '检测字数', value: plan.detection_quota <= 0 ? '不限' : `${plan.detection_quota.toLocaleString()}字/月` },
-    { title: '降重字数', value: plan.rewrite_quota <= 0 ? '不限' : `${plan.rewrite_quota.toLocaleString()}字/月` }
-  ];
 
   const handlePlanSelect = (plan: MemberPlan) => {
     if (!isAuthenticated) {
@@ -97,13 +121,12 @@ export const MembershipPage: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {getFilteredPlans().map((plan) => (
+            {filteredPlans.map((plan) => (
               <PlanCard
                 key={plan.id}
-                name={plan.name}
-                price={plan.price}
-                period={activeTab}
-                features={formatFeatures(plan)}
+                plan={plan}
+                currentPlan={currentPlan}
+                features={formatPlanFeatures(plan)}
                 isPopular={plan.level === 3}
                 onSelect={() => handlePlanSelect(plan)}
               />
@@ -152,6 +175,7 @@ export const MembershipPage: React.FC = () => {
       {selectedPlan && (
         <PaymentSection
           selectedPlan={selectedPlan}
+          currentPlan={currentPlan}
           onClose={() => setSelectedPlan(null)}
         />
       )}

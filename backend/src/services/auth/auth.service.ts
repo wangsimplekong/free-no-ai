@@ -87,6 +87,13 @@ export class AuthService {
         login_status: 1
       });
 
+      // Clear verification code only after successful registration
+      await this.verificationService.clearVerificationCode(
+        params.username,
+        verifyType,
+        VerifyBusinessType.REGISTER
+      );
+
       return {
         token: tokenInfo.accessToken,
         refreshToken: tokenInfo.refreshToken,
@@ -214,6 +221,13 @@ export class AuthService {
         login_status: 1
       });
 
+      // Clear verification code only after successful login
+      await this.verificationService.clearVerificationCode(
+        params.username,
+        verifyType,
+        VerifyBusinessType.LOGIN
+      );
+
       return {
         token: tokenInfo.accessToken,
         refreshToken: tokenInfo.refreshToken,
@@ -231,8 +245,13 @@ export class AuthService {
     }
   }
 
-  async logout(userId: string): Promise<void> {
+  async logout(userId: string | null): Promise<void> {
     try {
+      if (!userId) {
+        logger.info('No active session to logout');
+        return;
+      }
+
       logger.info('Processing logout', {
         userId,
         timestamp: new Date().toISOString()
@@ -247,7 +266,8 @@ export class AuthService {
       });
     } catch (error) {
       logger.error('Logout failed:', error);
-      throw error;
+      // We don't throw the error here to ensure the logout always succeeds from the client perspective
+      logger.warn('Continuing despite logout error');
     }
   }
 }

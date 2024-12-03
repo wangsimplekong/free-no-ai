@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { User, ChevronDown } from 'lucide-react';
+import { User, ChevronDown, Settings } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useAuthStore } from '../../stores/auth.store';
 import { BenefitsModal } from '../../pages/membership/components/BenefitsModal';
 import { useLoginModal } from '../../hooks/useLoginModal';
@@ -104,6 +105,14 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           <div className={`absolute right-0 mt-2 w-48 py-2 bg-white rounded-lg shadow-xl transition-all duration-200 ${
             isDropdownOpen ? 'opacity-100 visible' : 'opacity-0 invisible'
           }`}>
+            <Link
+              to="/profile"
+              onClick={() => setIsDropdownOpen(false)}
+              className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              <Settings className="w-4 h-4 mr-2" />
+              个人设置
+            </Link>
             <button
               onClick={() => {
                 setIsDropdownOpen(false);

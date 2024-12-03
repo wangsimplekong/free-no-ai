@@ -201,6 +201,16 @@ export class AuthController {
         ip: req.ip
       });
 
+      // If no userId is provided, just return success
+      if (!userId) {
+        logger.info('Logout successful - no active session', {
+          requestId,
+          context: 'AuthController.logout'
+        });
+        res.status(200).json(successResponse(null, 'Logout successful'));
+        return;
+      }
+
       await this.authService.logout(userId);
 
       logger.info('Logout successful', {
@@ -218,9 +228,8 @@ export class AuthController {
         userId: (req as any).user?.id
       });
 
-      res.status(400).json(errorResponse(
-        error instanceof Error ? error.message : 'Logout failed'
-      ));
+      // Even if logout fails, we still return 200 to the client
+      res.status(200).json(successResponse(null, 'Logout successful'));
     }
   };
 }

@@ -5,6 +5,7 @@ import { DetectionPage } from './pages/detection/DetectionPage';
 import { ReductionPage } from './pages/reduction/ReductionPage';
 import { MembershipPage } from './pages/membership/MembershipPage';
 import { OrderListPage } from './pages/order/OrderListPage';
+import { ProfilePage } from './pages/profile/ProfilePage';
 import { AuthProvider } from './providers/AuthProvider';
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
         <Route path="/reduction" element={<ReductionPage />} />
         <Route path="/membership" element={<MembershipPage />} />
         <Route path="/orders" element={<OrderListPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
       </Routes>
       <Toaster 
         position="top-center"

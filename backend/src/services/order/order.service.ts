@@ -4,6 +4,7 @@ import { MemberPlanService } from '../../services/member/plan.service';
 import { PaymentService } from '../../services/payment/payment.service';
 import { CreateOrderDTO, OrderResponse, OrderStatus } from '../../types/order.types';
 import { logger } from '../../utils/logger';
+import { paymentConfig } from '../../config/payment.config';
 
 interface OrderQueryParams {
   page: number;
@@ -42,27 +43,31 @@ export class OrderService {
         amount: parseFloat(plan.price.toString()),
         status: OrderStatus.PENDING,
         pay_type: dto.pay_type,
-        expire_time: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes expiry
+        expire_time: new Date(Date.now() + paymentConfig.order.expireTime * 1000),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       });
 
-      // // Generate payment URL
-      // const payment = await this.paymentService.createPayment({
-      //   orderNo: order.order_no,
-      //   orderId: order.id,
-      //   subject: `${plan.name} Subscription`,
-      //   body: `Subscription for ${plan.name}`,
-      //   amount: parseFloat(order.amount.toString()),
-      //   userId: userId
-      // });
+      // Generate payment URL
+      const payment = await this.paymentService.createPayment({
+        orderNo: order.order_no,
+        orderId: order.id,
+        subject: `${plan.name} Subscription`,
+        body: `Subscription for ${plan.name}`,
+        amount: parseFloat(order.amount.toString()),
+        userId: userId,
+        payType: dto.pay_type
+      });
 
-      // logger.info('Order created with payment URL', {
-      //   orderId: order.id,
-      //   orderNo: order.order_no,
-      //   payUrl: payment.payUrl
-      // });
+      logger.info('Order created with payment URL', {
+        orderId: order.id,
+        orderNo: order.order_no,
+        payUrl: payment.payUrl
+      });
 
       return {
-        ...order
+        ...order,
+        payUrl: payment.payUrl 
       };
     } catch (error) {
       logger.error('Failed to create order', {
