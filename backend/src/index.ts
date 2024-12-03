@@ -5,6 +5,7 @@ import { config } from './config';
 import { logger } from './utils/logger';
 import { authRoutes } from './routes/auth.routes';
 import { detectionRoutes } from './routes/detection.routes';
+import { reductionRoutes } from './routes/reduction.routes';
 import { aigcRoutes } from './routes/aigc.routes';
 import { memberRoutes } from './routes/member.routes';
 import { orderRoutes } from './routes/order.routes';
@@ -27,6 +28,7 @@ app.use(requestLoggerMiddleware());
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/v1/detection', detectionRoutes);
+app.use('/api/v1/reduction', reductionRoutes);
 app.use('/api/v1/aigc', aigcRoutes);
 app.use('/api/member', memberRoutes);
 app.use('/api/orders', orderRoutes);

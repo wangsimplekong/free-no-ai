@@ -2,15 +2,12 @@ import React from 'react';
 import { ArrowLeft, Globe2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { UserProfile } from '../../../components/user/UserProfile';
-import { useAuthStore } from '../../../stores/auth.store';
 
 interface MembershipHeaderProps {
   onBenefitsClick: () => void;
 }
 
 export const MembershipHeader: React.FC<MembershipHeaderProps> = ({ onBenefitsClick }) => {
-  const user = useAuthStore(state => state.user);
-
   return (
     <header className="sticky top-0 bg-white/80 backdrop-blur-md border-b border-gray-100 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -31,17 +28,7 @@ export const MembershipHeader: React.FC<MembershipHeaderProps> = ({ onBenefitsCl
               <Globe2 className="w-5 h-5 mr-1" />
               <span>中文</span>
             </button>
-            {user ? (
-              <UserProfile />
-            ) : (
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 rounded-full bg-gray-200"></div>
-                <div className="text-sm">
-                  <div className="font-medium">游客</div>
-                  <div className="text-gray-500">余额：¥0.00</div>
-                </div>
-              </div>
-            )}
+            <UserProfile />
           </div>
         </div>
       </div>

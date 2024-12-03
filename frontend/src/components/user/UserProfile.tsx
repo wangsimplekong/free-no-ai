@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { User, ChevronDown } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth.store';
 import { BenefitsModal } from '../../pages/membership/components/BenefitsModal';
+import { useLoginModal } from '../../hooks/useLoginModal';
 
 interface UserProfileProps {
   variant?: 'header' | 'compact';
@@ -18,14 +19,25 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   
   const { user, benefits, logout } = useAuthStore();
-
-  if (!user) return null;
+  const { openLoginModal } = useLoginModal();
 
   const handleLogout = () => {
     logout();
     setIsDropdownOpen(false);
     onLogout?.();
   };
+
+  // If not logged in, show login button
+  if (!user) {
+    return (
+      <button 
+        onClick={openLoginModal}
+        className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+      >
+        登录
+      </button>
+    );
+  }
 
   const displayName = user.nickname || user.username;
   const planName = benefits?.membership.planName || '普通会员';

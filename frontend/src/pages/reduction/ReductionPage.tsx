@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { ReductionHeader } from './components/ReductionHeader';
 import { TextInput } from './components/TextInput';
-import { FileUpload } from './components/FileUpload';
+import { FileUploadReduction } from '../../components/reduction/FileUploadReduction';
 import { ReductionResult } from './components/ReductionResult';
 import { ReductionHistory } from './components/ReductionHistory';
 import { reductionService } from '../../services/reduction.service';
-import { useAuthCheck } from '../../hooks/useAuthCheck';
+import { useAuthStore } from '../../stores/auth.store';
+import { useLoginModal } from '../../hooks/useLoginModal';
 
 export const ReductionPage: React.FC = () => {
   const [text, setText] = useState('');
@@ -13,11 +14,15 @@ export const ReductionPage: React.FC = () => {
   const [showResult, setShowResult] = useState(false);
   const [reducedText, setReducedText] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const { checkAuth } = useAuthCheck();
+  
+  const { isAuthenticated } = useAuthStore();
+  const { openLoginModal } = useLoginModal();
 
   const handleReduction = async () => {
-    // Check authentication before proceeding
-    if (!checkAuth()) return;
+    // if (!isAuthenticated) {
+    //   openLoginModal();
+    //   return;
+    // }
 
     try {
       setIsProcessing(true);
@@ -43,9 +48,19 @@ export const ReductionPage: React.FC = () => {
     }
   };
 
-  const handleFileUpload = () => {
-    // Check authentication before proceeding
-    if (!checkAuth()) return;
+  const handleProcessingComplete = (
+    reductionTaskId: string,
+    reduceUrl: string,
+    recheckUrl: string
+  ) => {
+    // Handle file reduction completion
+    setShowResult(true);
+    // You might want to show a different result view for file reductions
+  };
+
+  const handleProcessingError = (error: string) => {
+    setError(error);
+    setShowResult(false);
   };
 
   return (
@@ -69,7 +84,10 @@ export const ReductionPage: React.FC = () => {
               isProcessing={isProcessing}
             />
             <div className="mt-4 border-t border-gray-100 pt-4">
-              <FileUpload onUpload={handleFileUpload} />
+              <FileUploadReduction 
+                onProcessingComplete={handleProcessingComplete}
+                onError={handleProcessingError}
+              />
             </div>
           </div>
 

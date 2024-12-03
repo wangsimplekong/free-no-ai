@@ -1,12 +1,15 @@
 import cron from 'node-cron';
 import { logger } from '../../utils/logger';
 import { FileDetectionScheduler } from './file-detection.scheduler';
+import { FileReductionScheduler } from './file-reduction.scheduler';
 
 export class SchedulerService {
   private fileDetectionScheduler: FileDetectionScheduler;
+  private fileReductionScheduler: FileReductionScheduler;
 
   constructor() {
     this.fileDetectionScheduler = new FileDetectionScheduler();
+    this.fileReductionScheduler = new FileReductionScheduler();
   }
 
   initialize(): void {
@@ -19,7 +22,19 @@ export class SchedulerService {
       try {
         await this.fileDetectionScheduler.syncDetectionStatus();
       } catch (error) {
-        logger.error('Failed to run status sync job', {
+        logger.error('Failed to run detection status sync job', {
+          error,
+          timestamp: new Date().toISOString()
+        });
+      }
+    });
+
+    // Sync reduction status every 30 seconds
+    cron.schedule('*/30 * * * * *', async () => {
+      try {
+        await this.fileReductionScheduler.syncReductionStatus();
+      } catch (error) {
+        logger.error('Failed to run reduction status sync job', {
           error,
           timestamp: new Date().toISOString()
         });
@@ -41,7 +56,8 @@ export class SchedulerService {
     // Retry failed tasks every minute
     cron.schedule('* * * * *', async () => {
       try {
-        await this.fileDetectionScheduler.retryFailedTasks();
+        // await this.fileDetectionScheduler.retryFailedTasks();
+        await this.fileReductionScheduler.retryFailedTasks();
       } catch (error) {
         logger.error('Failed to run retry job', {
           error,

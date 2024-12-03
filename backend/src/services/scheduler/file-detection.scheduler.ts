@@ -28,7 +28,6 @@ export class FileDetectionScheduler {
       // Get unfinished tasks
       const unfinishedTasks = await this.detectionRepo.findUnfinishedTasks();
 
-      logger.info(unfinishedTasks);
       if (unfinishedTasks.length === 0) {
         return;
       }
@@ -42,7 +41,7 @@ export class FileDetectionScheduler {
           const results = await this.queryDetectionResults(taskIds);
           await this.updateTaskStatuses(results);
         } catch (error) {
-          logger.error('Failed to process batch', {
+          logger.error('AIGC Detection: Failed to process batch', {
             error,
             taskIds,
             timestamp: new Date().toISOString(),

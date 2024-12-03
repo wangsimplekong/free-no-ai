@@ -1,9 +1,9 @@
 export enum DetectionTaskStatus {
-  PENDING = 0,      // 待提交
-  SUBMITTED = 1,    // 已提交
-  PROCESSING = 2,   // 检测中
-  COMPLETED = 3,    // 已完成
-  FAILED = -1       // 失败
+  PENDING = 0, // 待提交
+  SUBMITTED = 1, // 已提交
+  PROCESSING = 2, // 检测中
+  COMPLETED = 3, // 已完成
+  FAILED = -1, // 失败
 }
 
 export interface DetectionListRequest {
