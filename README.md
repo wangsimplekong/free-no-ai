@@ -1,0 +1,2 @@
+# free-no-ai
+
