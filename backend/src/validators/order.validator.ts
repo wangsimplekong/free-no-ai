@@ -1,4 +1,4 @@
-import { body, query } from 'express-validator';
+import { body, query, param } from 'express-validator';
 import { PayType } from '../types/order.types';
 
 export const orderValidator = {
@@ -32,5 +32,15 @@ export const orderValidator = {
       .optional()
       .isISO8601()
       .withMessage('Invalid end date format')
+  ],
+
+  getOrderDetail: [
+    param('orderId')
+      .notEmpty()
+      .withMessage('Order ID is required')
+      .isString()
+      .withMessage('Order ID must be a string')
+      .isLength({ min: 1, max: 64 })
+      .withMessage('Invalid order ID length')
   ]
 };

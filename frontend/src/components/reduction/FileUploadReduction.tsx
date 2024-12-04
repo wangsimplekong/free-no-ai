@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { Upload, FileText, File, Loader2 } from 'lucide-react';
+import { Upload, FileText, File, Loader2, Download } from 'lucide-react';
 import { fileReductionService } from '../../services/file-reduction.service';
 import { useAuthStore } from '../../stores/auth.store';
 import { useLoginModal } from '../../hooks/useLoginModal';
@@ -33,6 +33,8 @@ export const FileUploadReduction: React.FC<FileUploadReductionProps> = ({
   const [status, setStatus] = useState<FileProcessingStatus>(
     FileProcessingStatus.IDLE
   );
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [recheckUrl, setRecheckUrl] = useState<string | null>(null);
   const [uploadState, setUploadState] = useState<FileUploadState>({
     uploading: false,
     progress: 0,
@@ -110,14 +112,14 @@ export const FileUploadReduction: React.FC<FileUploadReductionProps> = ({
         const queryResponse = await fileReductionService.queryResults({
           taskIds: [reductionResult.data.taskId],
         });
-
+        console.log(queryResponse.data.results);  
         const result = queryResponse.data.results[0];
-        if (result.state === 3) {
+        if (result.state === 2) {
           // Completed
           clearInterval(pollInterval);
           setStatus(FileProcessingStatus.COMPLETED);
           if (result.reduceUrl && result.recheckUrl) {
-            onProcessingComplete(
+            handleProcessingComplete(
               reductionResult.data.taskId,
               result.reduceUrl,
               result.recheckUrl
@@ -138,12 +140,39 @@ export const FileUploadReduction: React.FC<FileUploadReductionProps> = ({
           setStatus(FileProcessingStatus.FAILED);
           onError('处理超时，请重试');
         }
-      }, 5 * 60 * 1000);
+      }, 60 * 60 * 1000);
     } catch (error) {
       setStatus(FileProcessingStatus.FAILED);
       onError(error instanceof Error ? error.message : '文件处理失败');
     }
   };
+
+  const handleProcessingComplete = useCallback(
+    async (reductionTaskId: string, reduceUrl: string, recheckUrl: string) => {
+      try {
+        setDownloadUrl(reduceUrl);
+        setRecheckUrl(recheckUrl);
+        onProcessingComplete(reductionTaskId, reduceUrl, recheckUrl);
+      } catch (error) {
+        console.error('Error setting download URL:', error);
+        onError('准备下载时出错，请稍后重试');
+      }
+    },
+    [onProcessingComplete, onError]
+  );
+
+  const handleDownload = useCallback(async () => {
+    if (!downloadUrl) {
+      onError('下载链接不可用');
+      return;
+    }
+    try {
+      await fileReductionService.downloadReducedFile(downloadUrl);
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      onError('下载文件时出错，请稍后重试');
+    }
+  }, [downloadUrl, onError]);
 
   const handleDrop = useCallback(
     async (e: React.DragEvent) => {
@@ -298,6 +327,14 @@ export const FileUploadReduction: React.FC<FileUploadReductionProps> = ({
       <p className="text-sm text-gray-500">
         支持PDF、Word、TXT格式，单个文件大小不超过30MB
       </p>
+      {status === FileProcessingStatus.COMPLETED && (
+        <button
+          onClick={handleDownload}
+          className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+        >
+          下载文件
+        </button>
+      )}
     </div>
   );
 };

@@ -72,13 +72,12 @@ export class FileReductionRepository {
     wordCount: number;
     detectionId: string;
   }) {
-    const testUserId = uuidv4();
     try {
       const { data: result, error } = await supabase
         .from(this.TABLE_NAME)
         .insert([
           {
-            f_user_id: testUserId,
+            f_user_id: data.userId,
             f_title: data.title,
             f_word_count: data.wordCount,
             f_detection_id: data.detectionId,
@@ -106,13 +105,13 @@ export class FileReductionRepository {
   async updateTask(
     taskId: string,
     updateData: {
-      status?: ReduceTaskStatus;
-      errorMsg?: string;
-      reduceUrl?: string;
-      recheckUrl?: string;
-      reduceRate?: number;
-      processTime?: number;
-      thirdTaskId?: string;
+      f_status?: ReduceTaskStatus;
+      f_error_msg?: string;
+      f_reduce_url?: string;
+      f_recheck_url?: string;
+      f_reduce_rate?: number;
+      f_process_time?: number;
+      f_third_task_id?: string;
     }
   ) {
     try {
@@ -123,7 +122,7 @@ export class FileReductionRepository {
           f_update_time: new Date().toISOString(),
         })
         .eq('f_id', taskId);
-
+        
       if (error) {
         throw error;
       }

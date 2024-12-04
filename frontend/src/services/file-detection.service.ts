@@ -6,29 +6,36 @@ import type {
   FileDetectionRequest,
   FileDetectionResponse,
   QueryDetectionRequest,
-  QueryDetectionResponse
+  QueryDetectionResponse,
+  DetectionHistoryRequest,
+  DetectionHistoryResponse
 } from '../types/file-detection.types';
 
 class FileDetectionService {
-  private readonly baseUrl = '/api/v1/detection/file';
+  private readonly baseUrl = '/api/v1/detection';
 
   async getUploadSignature(): Promise<UploadSignatureResponse> {
-    const response = await api.post(`${this.baseUrl}/signature`);
+    const response = await api.post(`${this.baseUrl}/file/signature`);
     return response.data;
   }
 
   async parseDocument(params: ParseDocRequest): Promise<ParseDocResponse> {
-    const response = await api.post(`${this.baseUrl}/parse`, params);
+    const response = await api.post(`${this.baseUrl}/file/parse`, params);
     return response.data;
   }
 
   async submitDetection(params: FileDetectionRequest): Promise<FileDetectionResponse> {
-    const response = await api.post(`${this.baseUrl}/submit`, params);
+    const response = await api.post(`${this.baseUrl}/file/submit`, params);
     return response.data;
   }
 
   async queryResults(params: QueryDetectionRequest): Promise<QueryDetectionResponse> {
-    const response = await api.post(`${this.baseUrl}/query`, params);
+    const response = await api.post(`${this.baseUrl}/file/query`, params);
+    return response.data;
+  }
+
+  async getHistory(params: DetectionHistoryRequest): Promise<DetectionHistoryResponse> {
+    const response = await api.post(`${this.baseUrl}/task/list`, params);
     return response.data;
   }
 

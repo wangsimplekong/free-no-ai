@@ -1,43 +1,74 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { FileText, Download, ExternalLink } from 'lucide-react';
+import { fileReductionService } from '../../../services/file-reduction.service';
+import type { ReduceHistoryItem } from '../../../types/file-reduction.types';
 
 export const ReductionHistory: React.FC = () => {
-  const history = [
-    {
-      id: 1,
-      title: '毕业论文.docx',
-      time: '2024-03-28 15:30:45',
-      wordCount: 1234,
-      status: 'COMPLETED'
-    },
-    {
-      id: 2,
-      title: '研究报告初稿.pdf',
-      time: '2024-03-27 10:15:30',
-      wordCount: 2156,
-      status: 'PROCESSING'
-    },
-    {
-      id: 3,
-      title: '项目说明文档.txt',
-      time: '2024-03-26 09:45:12',
-      wordCount: 567,
-      status: 'FAILED'
-    }
-  ];
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<ReduceHistoryItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
-  const getStatusDisplay = (status: string) => {
+  const fetchHistory = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await fileReductionService.getReductionHistory({
+        pageNum: currentPage,
+        pageSize,
+      });
+      setHistory(response.data.list);
+      setTotal(response.data.total);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '获取历史记录失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchHistory();
+  }, [currentPage]);
+
+  const getStatusDisplay = (status: number) => {
     switch (status) {
-      case 'COMPLETED':
+      case 2:
         return <span className="text-green-600">已完成</span>;
-      case 'PROCESSING':
+      case 1:
         return <span className="text-blue-600">处理中</span>;
-      case 'FAILED':
+      case 3:
         return <span className="text-red-600">失败</span>;
+      case 0:
+        return <span className="text-yellow-600">等待中</span>;
       default:
         return <span className="text-gray-600">未知</span>;
     }
   };
+
+  const handleDownload = async (url?: string) => {
+    if (!url) {
+      return;
+    }
+    try {
+      await fileReductionService.downloadReducedFile(url);
+    } catch (err) {
+      console.error('Download failed:', err);
+    }
+  };
+
+  if (loading && !history.length) {
+    return <div className="text-center py-8">加载中...</div>;
+  }
+
+  if (error) {
+    return <div className="text-center text-red-600 py-8">{error}</div>;
+  }
+
+  if (!history.length) {
+    return <div className="text-center text-gray-500 py-8">暂无降重历史记录</div>;
+  }
 
   return (
     <div className="space-y-4">
@@ -56,8 +87,8 @@ export const ReductionHistory: React.FC = () => {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {history.map((item) => (
-              <tr key={item.id} className="hover:bg-gray-50">
-                <td className="py-4 px-4 text-sm">{item.time}</td>
+              <tr key={item.taskId} className="hover:bg-gray-50">
+                <td className="py-4 px-4 text-sm">{item.createTime}</td>
                 <td className="py-4 px-4">
                   <div className="flex items-center">
                     <FileText className="w-4 h-4 text-gray-400 mr-2" />
@@ -72,12 +103,22 @@ export const ReductionHistory: React.FC = () => {
                 </td>
                 <td className="py-4 px-4">
                   <div className="flex justify-end space-x-3">
-                    <button className="text-gray-500 hover:text-gray-700">
-                      <ExternalLink className="w-4 h-4" />
-                    </button>
-                    <button className="text-gray-500 hover:text-gray-700">
-                      <Download className="w-4 h-4" />
-                    </button>
+                    {item.recheckUrl && (
+                      <button 
+                        className="text-gray-500 hover:text-gray-700"
+                        onClick={() => handleDownload(item.recheckUrl)}
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                      </button>
+                    )}
+                    {item.reduceUrl && (
+                      <button 
+                        className="text-gray-500 hover:text-gray-700"
+                        onClick={() => handleDownload(item.reduceUrl)}
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -85,6 +126,28 @@ export const ReductionHistory: React.FC = () => {
           </tbody>
         </table>
       </div>
+
+      {total > pageSize && (
+        <div className="flex justify-end mt-4 space-x-2">
+          <button
+            className="px-3 py-1 border rounded disabled:opacity-50"
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage(p => p - 1)}
+          >
+            上一页
+          </button>
+          <span className="px-3 py-1">
+            第 {currentPage} 页 / 共 {Math.ceil(total / pageSize)} 页
+          </span>
+          <button
+            className="px-3 py-1 border rounded disabled:opacity-50"
+            disabled={currentPage >= Math.ceil(total / pageSize)}
+            onClick={() => setCurrentPage(p => p + 1)}
+          >
+            下一页
+          </button>
+        </div>
+      )}
     </div>
   );
 };

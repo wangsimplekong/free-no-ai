@@ -99,6 +99,7 @@ export class AigcReduceService {
 
       return firstResult;
     } catch (error) {
+      logger.error(error);
       logger.error('Text reduction failed', {
         error,
         textLength: text.length,

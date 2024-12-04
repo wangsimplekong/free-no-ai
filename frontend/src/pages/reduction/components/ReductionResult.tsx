@@ -1,13 +1,17 @@
 import React from 'react';
+import { Download, Share2 } from 'lucide-react';
+
 
 interface ReductionResultProps {
   originalText: string;
   reducedText: string;
+  reportUrl?: string;
 }
 
 export const ReductionResult: React.FC<ReductionResultProps> = ({
   originalText,
-  reducedText
+  reducedText,
+  reportUrl
 }) => {
   return (
     <div className="space-y-6">
@@ -36,9 +40,16 @@ export const ReductionResult: React.FC<ReductionResultProps> = ({
         <button className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50">
           复制结果
         </button>
-        <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-          下载结果
-        </button>
+        <a 
+          href={reportUrl}
+          download
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 inline-flex items-center"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <Download className="w-4 h-4" />
+          <span>下载结果</span>
+        </a>
       </div>
     </div>
   );

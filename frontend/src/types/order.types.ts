@@ -7,11 +7,12 @@ export interface CreateOrderResponse {
   code: number;
   message: string;
   data: {
-    order_id: string;
+    id: string;
     order_no: string;
     amount: number;
-    pay_url: string;
+    payUrl: string;
     expire_time: string;
+    status: number
   };
   timestamp: number;
 }

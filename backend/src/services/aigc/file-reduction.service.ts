@@ -11,6 +11,7 @@ import {
   QueryReduceRequest,
   QueryReduceResponse,
 } from '../../types/file-reduction.types';
+import { log } from 'console';
 
 export class AigcFileReductionService {
   private httpClient;
@@ -34,7 +35,8 @@ export class AigcFileReductionService {
         pageSize: params.pageSize,
         timestamp: new Date().toISOString(),
       });
-
+      
+      logger.info(params)
       const result = await this.reductionRepo.findReductionHistory(params);
 
       logger.info('Reduction history retrieved', {
@@ -87,8 +89,6 @@ export class AigcFileReductionService {
         }
       );
 
-      logger.info(response.data);
-
       if (response.data.code !== '0' && response.data.code !== 0) {
         await this.reductionRepo.updateTask(task.f_id, {
           f_status: ReduceTaskStatus.FAILED,
@@ -100,10 +100,10 @@ export class AigcFileReductionService {
       // Update task with third-party task ID
       await this.reductionRepo.updateTask(task.f_id, {
         f_status: ReduceTaskStatus.PENDING,
-        f_third_task_id: task.f_id,
+        f_third_task_id: task.f_detection_id,
       });
 
-      return { taskId: task.f_id };
+      return { taskId: task.f_detection_id};
     } catch (error) {
       logger.error(error);
       logger.error('Failed to submit reduction:', error);
@@ -121,7 +121,7 @@ export class AigcFileReductionService {
           const statusResponse = await this.httpClient.get(
             `/port/state/v1.html?report=${taskId}&reportKind=${aigcFileConfig.reduce.reportKind}&key=${aigcFileConfig.reduceApiKey}`
           );
-
+          
           if (
             statusResponse.data.code !== 0 ||
             !statusResponse.data.message?.length
@@ -135,9 +135,8 @@ export class AigcFileReductionService {
           let reduceUrl, recheckUrl;
           if (taskStatus.state === 2) {
             const reportResponse = await this.httpClient.get(
-              `/port/new-report/v2?taskId=${taskId}&key=${aigcFileConfig.reduceApiKey}`
+              `/port/new-report/v2?taskId=${taskId}-aigc&key=${aigcFileConfig.reduceApiKey}`
             );
-
             if (reportResponse.data.code === 0) {
               reduceUrl = reportResponse.data.data.resultDoc;
               recheckUrl = reportResponse.data.data.resultHtml;
@@ -162,11 +161,11 @@ export class AigcFileReductionService {
         const task = await this.reductionRepo.findByThirdTaskId(result.taskId);
         if (task) {
           await this.reductionRepo.updateTask(task.f_id, {
-            status: this.mapTaskStatus(result.state),
-            reduceUrl: result.reduceUrl,
-            recheckUrl: result.recheckUrl,
-            reduceRate: result.reduceRate,
-            processTime: result.processTime,
+            f_status: this.mapTaskStatus(result.state),
+            f_reduce_url: result.reduceUrl,
+            f_recheck_url: result.recheckUrl,
+            f_reduce_rate: result.reduceRate,
+            f_process_time: result.processTime,
           });
         }
       }

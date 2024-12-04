@@ -103,6 +103,8 @@ export class FileDetectionScheduler {
           f_report_time: result.reportTime,
           f_update_time: new Date(),
         };
+        logger.info('Updating task status result:')
+        logger.info(result)
 
         await this.detectionRepo.updateTask(result.taskId, updateData);
 

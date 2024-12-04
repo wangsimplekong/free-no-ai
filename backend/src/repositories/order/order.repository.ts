@@ -11,6 +11,8 @@ interface CreateOrderParams {
   status: OrderStatus;
   pay_type: PayType;
   expire_time: Date;
+  created_at: string;
+  updated_at: string;
 }
 
 interface OrderQueryParams {
@@ -23,7 +25,6 @@ interface OrderQueryParams {
 }
 
 export class OrderRepository {
-  // Change to instance property instead of static
   private readonly TABLE_NAME = 't_order';
 
   async create(params: CreateOrderParams) {
@@ -34,13 +35,16 @@ export class OrderRepository {
       });
 
       const insertData = {
+        id: params.id,
         order_no: params.order_no,
         user_id: params.user_id,
         plan_id: params.plan_id,
         amount: params.amount,
         status: params.status,
         pay_type: params.pay_type,
-        expire_time: params.expire_time.toISOString()
+        expire_time: params.expire_time.toISOString(),
+        created_at: params.created_at,
+        updated_at: params.updated_at
       };
 
       logger.info('Inserting order with data:', insertData);

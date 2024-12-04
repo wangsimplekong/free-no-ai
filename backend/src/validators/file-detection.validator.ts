@@ -23,11 +23,6 @@ export const fileDetectionValidator = {
       .withMessage('Task ID is required')
       .isString()
       .withMessage('Task ID must be a string'),
-    body('userId')
-      .notEmpty()
-      .withMessage('User ID is required')
-      .isString()
-      .withMessage('User ID must be a string'),
     body('title')
       .notEmpty()
       .withMessage('Title is required')
@@ -53,11 +48,6 @@ export const fileDetectionValidator = {
   ],
 
   getHistory: [
-    body('userId')
-      .notEmpty()
-      .withMessage('User ID is required')
-      .isString()
-      .withMessage('User ID must be a string'),
     body('pageNum')
       .optional()
       .isInt({ min: 1 })

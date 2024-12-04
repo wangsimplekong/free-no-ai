@@ -5,6 +5,7 @@ import type {
   OrderListParams,
   OrderListResponse,
   PaymentUrlResponse,
+  Order,
 } from '../types/order.types'
 
 class OrderService {
@@ -20,10 +21,9 @@ class OrderService {
     return response.data
   }
 
-  async getPaymentUrl(orderId: string) {
-    const response = await api.get<{ code: number; message: string; data: PaymentUrlResponse; timestamp: number }>(
-      `/api/orders/${orderId}/pay`
-    )
+  async getOrderDetail(orderId: string) {
+    const response = await api.get<{ code: number; message: string; data: Order; timestamp: number }>(
+      `/api/orders/detail/${orderId}`)
     return response.data
   }
 }

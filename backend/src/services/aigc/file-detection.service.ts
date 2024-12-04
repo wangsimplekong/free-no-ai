@@ -45,7 +45,7 @@ export class AigcFileDetectionService {
 
       return response.data.body;
     } catch (error) {
-      logger.error('Failed to get upload signature:', error);
+      logger.error(error);
       throw error;
     }
   }
@@ -78,8 +78,9 @@ export class AigcFileDetectionService {
     params: FileDetectionRequest
   ): Promise<FileDetectionResponse> {
     try {
-      params.userId = 123456;
+      const testUserId = 123456;
       // Create detection task record in database
+      logger.info(params)
       const task = await this.detectionRepo.createDetectionTask({
         userId: params.userId,
         title: params.title,
@@ -88,6 +89,7 @@ export class AigcFileDetectionService {
         sourceFileType: params.sourceFileType,
       });
 
+      params.userId = testUserId;
       // Submit to third-party service
       const response = await this.httpClient.post(
         '/external/aigc-task/post',

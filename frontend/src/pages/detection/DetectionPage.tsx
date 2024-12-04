@@ -8,6 +8,7 @@ import { DetectionHistory } from './components/DetectionHistory';
 import { detectionService } from '../../services/detection.service';
 import { fileDetectionService } from '../../services/file-detection.service';
 import { useAuthCheck } from '../../hooks/useAuthCheck';
+import { useAuthStore } from '../../stores/auth.store';
 import type { DetectionResponse } from '../../types/detection.types';
 import type { DetectionResult as FileDetectionResult } from '../../types/file-detection.types';
 
@@ -19,6 +20,7 @@ interface LocationState {
 export const DetectionPage: React.FC = () => {
   const location = useLocation();
   const state = location.state as LocationState;
+  const { user } = useAuthStore();
   
   const [text, setText] = useState(state?.text || '');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -68,7 +70,7 @@ export const DetectionPage: React.FC = () => {
       // Submit file detection task
       const response = await fileDetectionService.submitDetection({
         taskId,
-        userId: 'current-user-id', // Replace with actual user ID
+        userId: user?.id || '123',
         title: fileName,
         wordCount
       });

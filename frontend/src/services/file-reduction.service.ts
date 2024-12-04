@@ -1,4 +1,5 @@
 import api from '../lib/api';
+import { downloadFileFromUrl } from '../utils/download';
 import type {
   UploadSignatureResponse,
   ParseDocRequest,
@@ -9,10 +10,17 @@ import type {
   QueryReductionResponse,
   DetectionRequest,
   DetectionResponse,
+  ReduceListRequest,
+  ReduceListResponse,
 } from '../types/file-reduction.types';
 
 class FileReductionService {
   private readonly baseUrl = '/api/v1/reduction';
+
+  async getReductionHistory(params: ReduceListRequest): Promise<ReduceListResponse> {
+    const response = await api.post(`${this.baseUrl}/task/list`, params);
+    return response.data;
+  }
 
   async getUploadSignature(): Promise<UploadSignatureResponse> {
     const response = await api.post(`/api/v1/detection/file/signature`);
@@ -29,18 +37,21 @@ class FileReductionService {
     return response.data;
   }
 
-  async submitReduction(
-    params: FileReductionRequest
-  ): Promise<FileReductionResponse> {
+  async submitReduction(params: FileReductionRequest): Promise<FileReductionResponse> {
     const response = await api.post(`${this.baseUrl}/submit`, params);
     return response.data;
   }
 
-  async queryResults(
-    params: QueryReductionRequest
-  ): Promise<QueryReductionResponse> {
+  async queryResults(params: QueryReductionRequest): Promise<QueryReductionResponse> {
     const response = await api.post(`${this.baseUrl}/query`, params);
     return response.data;
+  }
+
+  async downloadReducedFile(url: string): Promise<void> {
+    if (!url) {
+      throw new Error('Download URL is not available');
+    }
+    await downloadFileFromUrl(url);
   }
 
   async uploadToObs(

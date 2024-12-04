@@ -8,18 +8,28 @@ import { v4 as uuidv4 } from 'uuid';
 export class AigcFileDetectionController {
   constructor(private aigcService: AigcFileDetectionService) {}
 
+  private getUserId(req: Request): string {
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      throw new Error('User not authenticated');
+    }
+    return userId;
+  }
+
   public getDetectionHistory = async (req: Request, res: Response): Promise<void> => {
     const requestId = uuidv4();
     try {
+      const userId = this.getUserId(req);
+
       logger.info('Detection history request received', {
         requestId,
-        userId: req.body.userId,
+        userId,
         pageNum: req.body.pageNum,
         pageSize: req.body.pageSize
       });
 
       const params: DetectionListRequest = {
-        userId: req.body.userId,
+        userId,
         pageNum: Number(req.body.pageNum) || 1,
         pageSize: Number(req.body.pageSize) || 10,
         startTime: req.body.startTime,
@@ -40,19 +50,23 @@ export class AigcFileDetectionController {
       logger.error('Failed to get detection history', {
         requestId,
         error,
-        userId: req.body.userId
+        userId: (req as any).user?.id
       });
 
       const message = error instanceof Error ? error.message : 'Failed to get detection history';
-      res.status(400).json(errorResponse(message));
+      res.status(error instanceof Error && error.message === 'User not authenticated' ? 401 : 400)
+        .json(errorResponse(message));
     }
   };
 
   public getUploadSignature = async (req: Request, res: Response): Promise<void> => {
     const requestId = uuidv4();
     try {
+      const userId = this.getUserId(req);
+
       logger.info('Upload signature request received', {
         requestId,
+        userId,
         ip: req.ip
       });
 
@@ -60,6 +74,7 @@ export class AigcFileDetectionController {
 
       logger.info('Upload signature generated', {
         requestId,
+        userId,
         taskId: result.ossid
       });
 
@@ -67,19 +82,23 @@ export class AigcFileDetectionController {
     } catch (error) {
       logger.error('Failed to generate upload signature', {
         requestId,
-        error
+        error,
+        userId: (req as any).user?.id
       });
 
       const message = error instanceof Error ? error.message : 'Failed to generate upload signature';
-      res.status(400).json(errorResponse(message));
+      res.status(error instanceof Error && error.message === 'User not authenticated' ? 401 : 400)
+        .json(errorResponse(message));
     }
   }
 
   public parseDocument = async (req: Request, res: Response): Promise<void> => {
     const requestId = uuidv4();
     try {
+      const userId = this.getUserId(req);
       logger.info('Document parse request received', {
         requestId,
+        userId,
         taskId: req.body.taskId,
         fileType: req.body.fileType
       });
@@ -91,6 +110,7 @@ export class AigcFileDetectionController {
 
       logger.info('Document parsed successfully', {
         requestId,
+        userId,
         taskId: req.body.taskId,
         wordCount: result.wordCount
       });
@@ -100,27 +120,37 @@ export class AigcFileDetectionController {
       logger.error('Failed to parse document', {
         requestId,
         error,
+        userId: (req as any).user?.id,
         taskId: req.body.taskId
       });
 
       const message = error instanceof Error ? error.message : 'Failed to parse document';
-      res.status(400).json(errorResponse(message));
+      res.status(error instanceof Error && error.message === 'User not authenticated' ? 401 : 400)
+        .json(errorResponse(message));
     }
   }
 
   public submitDetection = async (req: Request, res: Response): Promise<void> => {
     const requestId = uuidv4();
     try {
+      const userId = this.getUserId(req);
+      logger.info('userId:');
+      logger.info(userId);
       logger.info('Detection submission request received', {
         requestId,
+        userId,
         taskId: req.body.taskId,
         title: req.body.title
       });
 
-      const result = await this.aigcService.submitDetection(req.body);
+      const result = await this.aigcService.submitDetection({
+        ...req.body,
+        userId
+      });
 
       logger.info('Detection submitted successfully', {
         requestId,
+        userId,
         taskId: result.taskId
       });
 
@@ -129,28 +159,35 @@ export class AigcFileDetectionController {
       logger.error('Failed to submit detection', {
         requestId,
         error,
+        userId: (req as any).user?.id,
         taskId: req.body.taskId
       });
 
       const message = error instanceof Error ? error.message : 'Failed to submit detection';
-      res.status(400).json(errorResponse(message));
+      res.status(error instanceof Error && error.message === 'User not authenticated' ? 401 : 400)
+        .json(errorResponse(message));
     }
   }
 
   public queryResults = async (req: Request, res: Response): Promise<void> => {
     const requestId = uuidv4();
     try {
+      const userId = this.getUserId(req);
+
       logger.info('Results query request received', {
         requestId,
+        userId,
         taskIds: req.body.taskIds
       });
 
       const result = await this.aigcService.queryDetectionResults({
-        taskIds: req.body.taskIds
+        taskIds: req.body.taskIds,
+        userId
       });
 
       logger.info('Results retrieved successfully', {
         requestId,
+        userId,
         resultCount: result.results.length
       });
 
@@ -159,11 +196,13 @@ export class AigcFileDetectionController {
       logger.error('Failed to query results', {
         requestId,
         error,
+        userId: (req as any).user?.id,
         taskIds: req.body.taskIds
       });
 
       const message = error instanceof Error ? error.message : 'Failed to query results';
-      res.status(400).json(errorResponse(message));
+      res.status(error instanceof Error && error.message === 'User not authenticated' ? 401 : 400)
+        .json(errorResponse(message));
     }
   }
 }

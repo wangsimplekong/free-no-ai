@@ -1,10 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { QrCode, CreditCard, Loader2, ArrowUpRight } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
 import type { MemberPlan } from '../../../types/member.types';
 import type { UserBenefits } from '../../../types/auth.types';
 import { orderService } from '../../../services/order.service';
-import { calculateUpgradePrice, formatPrice, isPlanUpgradable } from '../../../utils/plan.utils';
+import { useAuthStore } from '../../../stores/auth.store';
+import {
+  calculateUpgradePrice,
+  formatPrice,
+  isPlanUpgradable,
+} from '../../../utils/plan.utils';
+import { throttle } from '../../../utils/throttle';
 
 interface PaymentSectionProps {
   selectedPlan: MemberPlan;
@@ -17,15 +24,19 @@ type PaymentMethodType = 'wechat' | 'alipay' | 'paypal';
 export const PaymentSection: React.FC<PaymentSectionProps> = ({
   selectedPlan,
   currentPlan,
-  onClose
+  onClose,
 }) => {
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodType>('wechat');
+  const [paymentMethod, setPaymentMethod] =
+    useState<PaymentMethodType>('wechat');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [payUrl, setPayUrl] = useState<string | null>(null);
+  const [orderId, setOrderId] = useState<string | null>(null);
+  const [pollTimeoutId, setPollTimeoutId] = useState<NodeJS.Timeout | null>(null);
+  const updateBenefits = useAuthStore(state => state.updateBenefits);
 
   const isUpgrade = currentPlan && isPlanUpgradable(currentPlan, selectedPlan);
-  const finalPrice = currentPlan 
+  const finalPrice = currentPlan
     ? calculateUpgradePrice(currentPlan, selectedPlan)
     : selectedPlan.price;
 
@@ -40,25 +51,93 @@ export const PaymentSection: React.FC<PaymentSectionProps> = ({
     }
   };
 
-  const handleCreateOrder = async () => {
+  const handlePaymentComplete = useCallback(async () => {
+    await updateBenefits();
+    toast.success('支付成功！');
+    onClose();
+  }, [updateBenefits, onClose]);
+
+  const handlePaymentFailed = useCallback(() => {
+    toast.error('支付失败，请重试');
+    onClose();
+  }, [onClose]);
+
+  const pollOrderStatus = useCallback(async () => {
+    if (!orderId) return;
+
     try {
-      setIsLoading(true);
-      setError(null);
+      const response = await orderService.getOrderDetail(orderId);
+      const status = response.data.status;
 
-      const response = await orderService.createOrder({
-        plan_id: selectedPlan.id,
-        pay_type: getPayType(paymentMethod),
-        upgrade_from: currentPlan ? currentPlan.planName : undefined
-      });
-
-      setPayUrl(response.data.pay_url);
-      toast.success('订单创建成功！');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '创建订单失败，请重试');
-    } finally {
-      setIsLoading(false);
+      if (status === 3) { // Payment successful
+        await handlePaymentComplete();
+      } else if (status === 4) { // Payment failed
+        handlePaymentFailed();
+      } else {
+        // Schedule next poll after 3 seconds
+        const timeoutId = setTimeout(pollOrderStatus, 3000);
+        setPollTimeoutId(timeoutId);
+      }
+    } catch (error) {
+      console.error('Failed to check order status:', error);
+      // Even on error, continue polling
+      const timeoutId = setTimeout(pollOrderStatus, 3000);
+      setPollTimeoutId(timeoutId);
     }
-  };
+  }, [orderId, handlePaymentComplete, handlePaymentFailed]);
+
+  const createOrder = useCallback(
+    throttle(async () => {
+      if (isLoading) return;
+      
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        const response = await orderService.createOrder({
+          plan_id: selectedPlan.id,
+          pay_type: getPayType(paymentMethod),
+          upgrade_from: currentPlan ? currentPlan.planName : undefined,
+        });
+
+        setPayUrl(response.data.payUrl);
+        setOrderId(response.data.id);
+        toast.success('订单创建成功！');
+      } catch (err) {
+        setError(err instanceof Error ? err.message : '创建订单失败，请重试');
+      } finally {
+        setIsLoading(false);
+      }
+    }, 1000),
+    [selectedPlan.id, paymentMethod, currentPlan, isLoading]
+  );
+
+  // Start polling when order is created
+  useEffect(() => {
+    if (orderId) {
+      pollOrderStatus();
+    }
+
+    return () => {
+      if (pollTimeoutId) {
+        clearTimeout(pollTimeoutId);
+      }
+    };
+  }, [orderId, pollOrderStatus]);
+
+  // Create order when component mounts
+  useEffect(() => {
+    createOrder();
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (pollTimeoutId) {
+        clearTimeout(pollTimeoutId);
+      }
+    };
+  }, [pollTimeoutId]);
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -96,7 +175,9 @@ export const PaymentSection: React.FC<PaymentSectionProps> = ({
               <span className="text-gray-600">
                 {isUpgrade ? '补差价金额' : '支付金额'}
               </span>
-              <span className="font-medium text-lg">¥{formatPrice(finalPrice)}</span>
+              <span className="font-medium text-lg">
+                ¥{formatPrice(finalPrice)}
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">有效期限</span>
@@ -129,9 +210,13 @@ export const PaymentSection: React.FC<PaymentSectionProps> = ({
                     : 'border-gray-200 hover:border-blue-300'
                 }`}
               >
-                <QrCode className={`w-6 h-6 ${
-                  paymentMethod === 'wechat' ? 'text-blue-500' : 'text-gray-400'
-                }`} />
+                <QrCode
+                  className={`w-6 h-6 ${
+                    paymentMethod === 'wechat'
+                      ? 'text-blue-500'
+                      : 'text-gray-400'
+                  }`}
+                />
                 <span className="mt-1 text-sm">微信支付</span>
               </button>
               <button
@@ -142,9 +227,13 @@ export const PaymentSection: React.FC<PaymentSectionProps> = ({
                     : 'border-gray-200 hover:border-blue-300'
                 }`}
               >
-                <CreditCard className={`w-6 h-6 ${
-                  paymentMethod === 'alipay' ? 'text-blue-500' : 'text-gray-400'
-                }`} />
+                <CreditCard
+                  className={`w-6 h-6 ${
+                    paymentMethod === 'alipay'
+                      ? 'text-blue-500'
+                      : 'text-gray-400'
+                  }`}
+                />
                 <span className="mt-1 text-sm">支付宝</span>
               </button>
               <button
@@ -155,9 +244,13 @@ export const PaymentSection: React.FC<PaymentSectionProps> = ({
                     : 'border-gray-200 hover:border-blue-300'
                 }`}
               >
-                <CreditCard className={`w-6 h-6 ${
-                  paymentMethod === 'paypal' ? 'text-blue-500' : 'text-gray-400'
-                }`} />
+                <CreditCard
+                  className={`w-6 h-6 ${
+                    paymentMethod === 'paypal'
+                      ? 'text-blue-500'
+                      : 'text-gray-400'
+                  }`}
+                />
                 <span className="mt-1 text-sm">PayPal</span>
               </button>
             </div>
@@ -165,44 +258,38 @@ export const PaymentSection: React.FC<PaymentSectionProps> = ({
 
           {/* QR Code */}
           <div className="flex flex-col items-center">
-            <div className="w-48 h-48 bg-gray-100 rounded-lg flex items-center justify-center">
+            <div className="w-48 h-48 bg-gray-50 rounded-lg flex items-center justify-center">
               {isLoading ? (
                 <div className="text-center">
                   <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-2" />
                   <span className="text-gray-500">获取支付二维码...</span>
                 </div>
               ) : payUrl ? (
-                <img 
-                  src={payUrl} 
-                  alt="支付二维码"
-                  className="w-full h-full object-contain"
+                <QRCodeSVG
+                  value={payUrl}
+                  size={160}
+                  level="H"
+                  includeMargin
+                  className="rounded-lg"
                 />
               ) : (
-                <span className="text-gray-500">点击下方按钮获取支付二维码</span>
+                <span className="text-gray-500">
+                  获取支付二维码失败，请重试
+                </span>
               )}
             </div>
             <p className="mt-3 text-sm text-gray-500">
-              请使用{
-                paymentMethod === 'wechat' ? '微信' :
-                paymentMethod === 'alipay' ? '支付宝' : 'PayPal'
-              }扫码支付
+              请使用
+              {paymentMethod === 'wechat'
+                ? '微信'
+                : paymentMethod === 'alipay'
+                ? '支付宝'
+                : 'PayPal'}
+              扫码支付
             </p>
-            <button 
-              onClick={handleCreateOrder}
-              disabled={isLoading}
-              className="mt-4 w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-300 flex items-center justify-center space-x-2"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>处理中...</span>
-                </>
-              ) : (
-                <span>
-                  {isUpgrade ? '确认升级' : '确认支付'} ¥{formatPrice(finalPrice)}
-                </span>
-              )}
-            </button>
+            <p className="mt-2 text-sm text-gray-400">
+              支付金额：¥{formatPrice(finalPrice)}
+            </p>
           </div>
         </div>
       </div>

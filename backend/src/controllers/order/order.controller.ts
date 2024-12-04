@@ -5,7 +5,7 @@ import { MemberPlanService } from '../../services/member/plan.service';
 import { PaymentService } from '../../services/payment/payment.service';
 import { logger } from '../../utils/logger';
 import { successResponse, errorResponse } from '../../utils/response.util';
-import { CreateOrderDTO } from '../../types/order.types';
+import { CreateOrderDTO, OrderResponse, OrderStatus } from '../../types/order.types';
 import { v4 as uuidv4 } from 'uuid';
 
 export class OrderController {
@@ -106,6 +106,39 @@ export class OrderController {
       });
 
       const message = error instanceof Error ? error.message : 'Failed to fetch orders';
+      res.status(400).json(errorResponse(message));
+    }
+  };
+
+  public getOrderDetail = async (req: Request, res: Response): Promise<void> => {
+    const requestId = uuidv4();
+    try {
+      const { orderId } = req.params;
+      const userId = (req as any).user?.id;
+
+      logger.info('Fetching order detail', {
+        requestId,
+        orderId,
+        userId
+      });
+
+      const result = await this.orderService.getOrderDetail(orderId, userId);
+
+      logger.info('Order detail fetched successfully', {
+        requestId,
+        orderId
+      });
+
+      res.status(200).json(successResponse(result));
+    } catch (error) {
+      logger.error('Failed to fetch order detail', {
+        requestId,
+        error,
+        orderId: req.params.orderId,
+        user: (req as any).user
+      });
+
+      const message = error instanceof Error ? error.message : 'Failed to fetch order detail';
       res.status(400).json(errorResponse(message));
     }
   };

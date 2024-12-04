@@ -72,3 +72,34 @@ export interface FileUploadState {
   error: string | null;
   taskId: string | null;
 }
+
+export interface DetectionHistoryRequest {
+  pageNum?: number;
+  pageSize?: number;
+  startTime?: string;
+  endTime?: string;
+  status?: number;
+}
+
+export interface DetectionHistoryItem {
+  taskId: string;
+  title: string;
+  createTime: string;
+  wordCount: number;
+  aiProbability: number;
+  reportUrl?: string;
+  detailUrl?: string;
+  status: number;
+}
+
+export interface DetectionHistoryResponse {
+  code: number;
+  message: string;
+  data: {
+    list: DetectionHistoryItem[];
+    total: number;
+    pages: number;
+    pageNum: number;
+    pageSize: number;
+  };
+}

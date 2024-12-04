@@ -4,6 +4,7 @@ import { AigcFileReductionService } from '../services/aigc/file-reduction.servic
 import { validateRequest } from '../middlewares/validate.middleware';
 import { fileReductionValidator } from '../validators/file-reduction.validator';
 import { logger } from '../utils/logger';
+import { authMiddleware } from '../middlewares/auth.middleware';
 
 const router = Router();
 
@@ -24,6 +25,7 @@ router.use((req, res, next) => {
 // File reduction routes
 router.post(
   '/task/list',
+  authMiddleware,
   fileReductionValidator.getHistory,
   validateRequest,
   reductionController.getReductionHistory
@@ -31,6 +33,7 @@ router.post(
 
 router.post(
   '/submit',
+  authMiddleware,
   fileReductionValidator.submitReduction,
   validateRequest,
   reductionController.submitReduction
@@ -38,6 +41,7 @@ router.post(
 
 router.post(
   '/query',
+  authMiddleware,
   fileReductionValidator.queryResults,
   validateRequest,
   reductionController.queryResults

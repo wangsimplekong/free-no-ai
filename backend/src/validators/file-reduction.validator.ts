@@ -3,11 +3,6 @@ import { ReduceTaskStatus } from '../types/file-reduction.types';
 
 export const fileReductionValidator = {
   getHistory: [
-    body('userId')
-      .notEmpty()
-      .withMessage('User ID is required')
-      .isString()
-      .withMessage('User ID must be a string'),
     body('pageNum')
       .optional()
       .isInt({ min: 1 })
@@ -37,11 +32,6 @@ export const fileReductionValidator = {
       .withMessage('Task ID is required')
       .isString()
       .withMessage('Task ID must be a string'),
-    body('userId')
-      .notEmpty()
-      .withMessage('User ID is required')
-      .isString()
-      .withMessage('User ID must be a string'),
     body('title')
       .notEmpty()
       .withMessage('Title is required')

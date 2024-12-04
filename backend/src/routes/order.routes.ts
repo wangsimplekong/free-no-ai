@@ -26,4 +26,12 @@ router.get(
   orderController.getOrders
 );
 
+router.get(
+  '/detail/:orderId',
+  authMiddleware,
+  orderValidator.getOrderDetail,
+  validateRequest,
+  orderController.getOrderDetail
+);
+
 export const orderRoutes = router;

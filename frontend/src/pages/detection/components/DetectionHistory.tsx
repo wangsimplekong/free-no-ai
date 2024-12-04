@@ -1,30 +1,48 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { FileText, Download, ExternalLink } from 'lucide-react';
+import { fileDetectionService } from '../../../services/file-detection.service';
+import type { DetectionHistoryItem } from '../../../types/file-detection.types';
 
 export const DetectionHistory: React.FC = () => {
-  const history = [
-    {
-      id: 1,
-      title: '毕业论文.docx',
-      time: '2024-03-28 15:30:45',
-      wordCount: 1234,
-      aiProbability: 85
-    },
-    {
-      id: 2,
-      title: '研究报告初稿.pdf',
-      time: '2024-03-27 10:15:30',
-      wordCount: 2156,
-      aiProbability: 15
-    },
-    {
-      id: 3,
-      title: '项目说明文档.txt',
-      time: '2024-03-26 09:45:12',
-      wordCount: 567,
-      aiProbability: 95
+  const [history, setHistory] = useState<DetectionHistoryItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
+
+  const fetchHistory = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await fileDetectionService.getHistory({
+        pageNum: currentPage,
+        pageSize,
+      });
+      
+      if (response.code === 200 && response.data) {
+        setHistory(response.data.list || []);
+      } else {
+        throw new Error(response.message || '获取历史记录失败');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '获取历史记录失败');
+      console.error('Failed to fetch detection history:', err);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  useEffect(() => {
+    fetchHistory();
+  }, [currentPage]);
+
+  if (loading) {
+    return <div className="text-center py-4">加载中...</div>;
+  }
+
+  if (error) {
+    return <div className="text-center text-red-500 py-4">{error}</div>;
+  }
 
   return (
     <div className="space-y-4">
@@ -43,43 +61,60 @@ export const DetectionHistory: React.FC = () => {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {history.map((item) => (
-              <tr key={item.id} className="hover:bg-gray-50">
-                <td className="py-4 px-4 text-sm">{item.time}</td>
+              <tr key={item.taskId} className="hover:bg-gray-50">
+                <td className="py-4 px-4 text-sm">{item.createTime}</td>
                 <td className="py-4 px-4">
                   <div className="flex items-center">
                     <FileText className="w-4 h-4 text-gray-400 mr-2" />
                     <span className="text-sm">{item.title}</span>
                   </div>
                 </td>
-                <td className="py-4 px-4 text-sm">
-                  {item.wordCount.toLocaleString()}字
-                </td>
+                <td className="py-4 px-4 text-sm">{item.wordCount}</td>
                 <td className="py-4 px-4">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    item.aiProbability > 80
-                      ? 'bg-red-100 text-red-800'
-                      : item.aiProbability > 40
-                      ? 'bg-yellow-100 text-yellow-800'
-                      : 'bg-green-100 text-green-800'
-                  }`}>
-                    {item.aiProbability}%
-                  </span>
-                </td>
-                <td className="py-4 px-4">
-                  <div className="flex justify-end space-x-3">
-                    <button className="text-gray-500 hover:text-gray-700">
-                      <ExternalLink className="w-4 h-4" />
-                    </button>
-                    <button className="text-gray-500 hover:text-gray-700">
-                      <Download className="w-4 h-4" />
-                    </button>
+                  <div className="flex items-center">
+                    <div className="w-full bg-gray-200 rounded-full h-2.5">
+                      <div
+                        className="bg-blue-600 h-2.5 rounded-full"
+                        style={{ width: `${item.aiProbability}%` }}
+                      ></div>
+                    </div>
+                    <span className="ml-2 text-sm">{item.aiProbability}%</span>
                   </div>
+                </td>
+                <td className="py-4 px-4 text-right space-x-2">
+                  {item.reportUrl && (
+                    <a
+                      href={item.reportUrl}
+                      download
+                      className="inline-flex items-center text-gray-500 hover:text-gray-700"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <Download className="w-4 h-4" />
+                    </a>
+                  )}
+                  {item.detailUrl && (
+                    <a
+                      href={item.detailUrl}
+                      className="inline-flex items-center text-gray-500 hover:text-gray-700"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      
+      {history.length === 0 && (
+        <div className="text-center py-8 text-gray-500">
+          暂无检测历史
+        </div>
+      )}
     </div>
   );
 };

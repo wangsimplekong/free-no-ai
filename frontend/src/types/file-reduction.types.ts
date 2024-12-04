@@ -93,3 +93,32 @@ export enum FileProcessingStatus {
   COMPLETED = 'COMPLETED',
   FAILED = 'FAILED'
 }
+
+export interface ReduceListRequest {
+  pageNum?: number;
+  pageSize?: number;
+  startTime?: string;
+  endTime?: string;
+  status?: number;
+}
+
+export interface ReduceHistoryItem {
+  taskId: string;
+  title: string;
+  wordCount: number;
+  status: number;
+  createTime: string;
+  reduceUrl?: string;
+  recheckUrl?: string;
+  reduceRate?: number;
+}
+
+export interface ReduceListResponse {
+  code: number;
+  message: string;
+  data: {
+    total: number;
+    pages: number;
+    list: ReduceHistoryItem[];
+  };
+}

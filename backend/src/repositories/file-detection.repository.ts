@@ -87,11 +87,10 @@ export class FileDetectionRepository {
   }) {
     try {
       // Generate random UUID for testing purposes
-      const testUserId = uuidv4();
 
       logger.info('Creating detection task', {
         context: 'FileDetectionRepository.createDetectionTask',
-        userId: testUserId,
+        userId: data.userId,
         title: data.title,
         wordCount: data.wordCount,
         fileType: data.sourceFileType,
@@ -102,7 +101,7 @@ export class FileDetectionRepository {
         .from(this.TABLE_NAME)
         .insert([
           {
-            f_user_id: testUserId,
+            f_user_id: data.userId,
             f_title: data.title,
             f_word_count: data.wordCount,
             f_status: DetectionTaskStatus.PENDING,
@@ -134,12 +133,13 @@ export class FileDetectionRepository {
       logger.info('Detection task created successfully', {
         context: 'FileDetectionRepository.createDetectionTask',
         taskId: result.f_id,
-        userId: testUserId,
+        userId: data.userId,
         timestamp: new Date().toISOString(),
       });
 
       return result;
     } catch (error) {
+      logger.error(error)
       logger.error('Failed to create detection task', {
         context: 'FileDetectionRepository.createDetectionTask',
         error:
@@ -223,15 +223,6 @@ export class FileDetectionRepository {
     }
   ) {
     try {
-      logger.info('Updating detection task');
-      logger.info({
-        context: 'FileDetectionRepository.updateTask',
-        taskId,
-        updateFields: Object.keys(updateData),
-        updateData: updateData,
-        timestamp: new Date().toISOString(),
-      });
-
       const dbUpdateData: Record<string, any> = {};
 
       // Map the input fields to database column names
@@ -259,7 +250,7 @@ export class FileDetectionRepository {
       const { error } = await supabase
         .from(this.TABLE_NAME)
         .update(dbUpdateData)
-        .eq('f_id', taskId);
+        .eq('f_third_task_id', taskId);
 
       if (error) {
         logger.error('Database error in updateTask', {

@@ -36,32 +36,40 @@ export class FileReductionScheduler {
         const taskIds = batch.map((task) => task.f_third_task_id);
 
         try {
-          const response = await this.httpClient.post(
-            '/internal/aigc-reduce/query',
-            {
-              key: aigcFileConfig.reducePlatformKey,
-              taskIds,
-            },
-            {
-              headers: { key: aigcFileConfig.reduceApiKey },
+          for (const taskId of taskIds) {
+            const statusResponse = await this.httpClient.get(
+              `/port/state/v1.html?report=${taskId}&reportKind=${aigcFileConfig.reduce.reportKind}&key=${aigcFileConfig.reduceApiKey}`
+            );
+            logger.info(`/port/state/v1.html?report=${taskId}&reportKind=${aigcFileConfig.reduce.reportKind}&key=${aigcFileConfig.reduceApiKey}`);
+            logger.info(statusResponse.data)
+            if (
+              statusResponse.data.code !== 0 ||
+              !statusResponse.data.message?.length
+            ) {
+              throw new Error('Failed to query reduction status');
             }
-          );
-
-          if (response.data.status === '200') {
-            for (const result of response.data.body) {
-              const task = await this.reductionRepo.findByThirdTaskId(
-                result.taskId
+        
+            const taskStatus = statusResponse.data.message[0];
+            let reduceUrl, recheckUrl;
+            if (taskStatus.state === 2) {
+              const reportResponse = await this.httpClient.get(
+                `/port/new-report/v2?taskId=${taskId}-aigc&key=${aigcFileConfig.reduceApiKey}`
               );
-              if (task) {
-                await this.reductionRepo.updateTask(task.f_id, {
-                  status: this.mapTaskStatus(result.state),
-                  reduceUrl: result.reduceUrl,
-                  recheckUrl: result.recheckUrl,
-                  reduceRate: result.reduceRate,
-                  processTime: result.processTime,
-                });
+              if (reportResponse.data.code === 0) {
+                reduceUrl = reportResponse.data.data.resultDoc;
+                recheckUrl = reportResponse.data.data.resultHtml;
               }
             }
+
+            const task = await this.reductionRepo.findByThirdTaskId(taskId);
+            if (task) {
+              await this.reductionRepo.updateTask(task.f_id, {
+                f_status: this.mapTaskStatus(taskStatus.state),
+                f_reduce_url: reduceUrl,
+                f_recheck_url: recheckUrl,
+              });
+            }
+            
           }
         } catch (error) {
           logger.error(error);
@@ -124,9 +132,9 @@ export class FileReductionScheduler {
 
           if (response.data.status === '200') {
             await this.reductionRepo.updateTask(task.f_id, {
-              status: ReduceTaskStatus.PENDING,
-              thirdTaskId: response.data.body,
-              errorMsg: null,
+              f_status: ReduceTaskStatus.PENDING,
+              f_third_task_id: response.data.body,
+              f_error_msg: null,
             });
           }
         } catch (error) {
