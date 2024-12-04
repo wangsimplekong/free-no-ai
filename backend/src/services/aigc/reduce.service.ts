@@ -60,7 +60,22 @@ export class AigcReduceService {
   private buildSecondPrompt(text: string): OpenAIMessage[] {
     return [{
       role: 'user',
-      content: `判断下面文本中是否存在乱码、严重不通顺、语病、中文简体繁体混合等问题，只需要输出是或否。\n\n原文：\n${text}\n\n# 输出：\n`
+      content: `请分析下面文本的质量，检查以下几点：
+1. 是否存在乱码
+2. 是否存在严重不通顺
+3. 是否存在明显语病
+4. 是否存在中文简体繁体混合
+
+如果存在以上任何问题，请回复格式如下：
+{"status": "error", "issues": ["具体问题1", "具体问题2"]}
+
+如果文本质量良好，请回复：
+{"status": "ok"}
+
+原文：
+${text}
+
+输出：`
     }];
   }
 
@@ -81,23 +96,50 @@ export class AigcReduceService {
 
       // Quality check
       const secondPrompt = this.buildSecondPrompt(firstResult);
-      const qualityCheck = await this.callOpenAI(secondPrompt);
+      const qualityCheckResponse = await this.callOpenAI(secondPrompt);
+      
+      try {
+        const qualityResult = JSON.parse(qualityCheckResponse);
+        
+        if (qualityResult.status === 'error') {
+          logger.warn('Quality check found issues', {
+            issues: qualityResult.issues,
+            originalLength: text.length,
+            reducedLength: firstResult.length
+          });
+          
+          // 尝试修复质量问题
+          const fixPrompt = [{
+            role: 'user',
+            content: `请修复以下文本中的问题：${qualityResult.issues.join('、')}。
+保持原意的同时，使文本更加通顺、规范。
 
-      if (qualityCheck.toLowerCase().includes('是')) {
-        logger.warn('Quality check failed, using first reduction result', {
-          originalLength: text.length,
-          reducedLength: firstResult.length
-        });
-        throw new Error('Text quality check failed');
+原文：
+${firstResult}
+
+输出：`
+          }];
+          
+          const fixedResult = await this.callOpenAI(fixPrompt);
+          logger.info('Text fixed after quality check', {
+            originalLength: firstResult.length,
+            fixedLength: fixedResult.length
+          });
+          
+          return fixedResult;
+        } else {
+          logger.info('Text reduction completed successfully', {
+            originalLength: text.length,
+            reducedLength: firstResult.length,
+            timestamp: new Date().toISOString()
+          });
+
+          return firstResult;
+        }
+      } catch (error) {
+        logger.error('Failed to parse quality check response', error);
+        throw new Error('Failed to process text reduction');
       }
-
-      logger.info('Text reduction completed successfully', {
-        originalLength: text.length,
-        reducedLength: firstResult.length,
-        timestamp: new Date().toISOString()
-      });
-
-      return firstResult;
     } catch (error) {
       logger.error(error);
       logger.error('Text reduction failed', {

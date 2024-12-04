@@ -44,8 +44,6 @@ class FileDetectionService {
     signature: UploadSignatureResponse
   ): Promise<boolean> {
     try {
-      console.info(signature);
-      debugger;
       const formData = new FormData();
       formData.append('ossid', signature.data.ossid);
       formData.append('ossaccesskeyid', signature.data.ossAccessKeyId);

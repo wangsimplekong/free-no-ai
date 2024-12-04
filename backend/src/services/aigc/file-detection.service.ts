@@ -78,7 +78,20 @@ export class AigcFileDetectionService {
     params: FileDetectionRequest
   ): Promise<FileDetectionResponse> {
     try {
-      const testUserId = 123456;
+      // Submit to third-party service
+      const response = await this.httpClient.post(
+        '/external/aigc-task/post',
+        {
+          key: aigcFileConfig.platformKey,
+          ...params,
+          userId: 123456,
+          ...aigcFileConfig.defaultParams,
+        },
+        {
+          headers: { key: aigcFileConfig.apiKey },
+        }
+      );
+      
       // Create detection task record in database
       logger.info(params)
       const task = await this.detectionRepo.createDetectionTask({
@@ -87,37 +100,13 @@ export class AigcFileDetectionService {
         wordCount: params.wordCount,
         sourceFileUrl: params.sourceFileUrl,
         sourceFileType: params.sourceFileType,
+        f_third_task_id: response.data.body,
+        f_status: DetectionTaskStatus.SUBMITTED,
       });
-
-      params.userId = testUserId;
-      // Submit to third-party service
-      const response = await this.httpClient.post(
-        '/external/aigc-task/post',
-        {
-          key: aigcFileConfig.platformKey,
-          ...params,
-          ...aigcFileConfig.defaultParams,
-        },
-        {
-          headers: { key: aigcFileConfig.apiKey },
-        }
-      );
 
       if (response.data.status !== '200') {
-        // Update task status to failed if submission fails
-        await this.detectionRepo.updateTask(task.f_id, {
-          f_status: DetectionTaskStatus.FAILED,
-          f_error_msg: response.data.message || 'Failed to submit detection',
-        });
         throw new Error(response.data.message || 'Failed to submit detection');
       }
-
-      logger.info("Starting update status... ")
-      // Update task with third-party task ID
-      await this.detectionRepo.updateTask(task.f_id, {
-        f_status: DetectionTaskStatus.SUBMITTED,
-        f_third_task_id: response.data.body,
-      });
 
       return { taskId: response.data.body };
     } catch (error) {
@@ -147,19 +136,24 @@ export class AigcFileDetectionService {
         );
       }
 
+      const results = []
+
       // Update local task records with results
       for (const result of response.data.body) {
-        const task = await this.detectionRepo.findByThirdTaskId(result.taskId);
-        if (task) {
-          await this.detectionRepo.updateTask(task.f_id, {
-            f_status: this.mapTaskStatus(result.state),
-            f_similarity: result.similarity,
-            f_report_url: result.zipurl,
-          });
+        if ([DetectionTaskStatus.COMPLETED, DetectionTaskStatus.FAILED].includes(this.mapTaskStatus(result.state))) {
+          const task = await this.detectionRepo.findByThirdTaskId(result.taskId);
+          if (task && task.state !== this.mapTaskStatus(result.state)) {
+            await this.detectionRepo.updateTask(task.f_id, {
+              f_status: this.mapTaskStatus(result.state),
+              f_similarity: result.similarity,
+              f_report_url: result.zipurl,
+            });
+          }
         }
+        results.push(result)
       }
 
-      return { results: response.data.body };
+      return { results };
     } catch (error) {
       logger.error('Failed to query detection results:', error);
       throw error;

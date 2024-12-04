@@ -52,6 +52,7 @@ export class FileDetectionRepository {
         id: item.f_id,
         title: item.f_title,
         wordCount: item.f_word_count,
+        taskId: item.f_third_task_id,
         createTime: item.f_create_time,
         status: item.f_status,
         similarity: item.f_similarity,
@@ -84,6 +85,7 @@ export class FileDetectionRepository {
     wordCount: number;
     sourceFileUrl?: string;
     sourceFileType?: string;
+    f_third_task_id: string;
   }) {
     try {
       // Generate random UUID for testing purposes
@@ -104,6 +106,7 @@ export class FileDetectionRepository {
             f_user_id: data.userId,
             f_title: data.title,
             f_word_count: data.wordCount,
+            f_third_task_id: data.f_third_task_id,
             f_status: DetectionTaskStatus.PENDING,
             f_source_file_url: data.sourceFileUrl,
             f_source_file_type: data.sourceFileType,
@@ -250,7 +253,7 @@ export class FileDetectionRepository {
       const { error } = await supabase
         .from(this.TABLE_NAME)
         .update(dbUpdateData)
-        .eq('f_third_task_id', taskId);
+        .eq('f_id', taskId);
 
       if (error) {
         logger.error('Database error in updateTask', {

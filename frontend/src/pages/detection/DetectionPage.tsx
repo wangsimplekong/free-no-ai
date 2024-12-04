@@ -1,62 +1,104 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { DetectionHeader } from './components/DetectionHeader';
 import { TextInput } from './components/TextInput';
 import { FileUpload } from './components/FileUpload';
 import { DetectionResult } from './components/DetectionResult';
 import { DetectionHistory } from './components/DetectionHistory';
+import { DetectionLoading } from './components/DetectionLoading';
 import { detectionService } from '../../services/detection.service';
 import { fileDetectionService } from '../../services/file-detection.service';
 import { useAuthCheck } from '../../hooks/useAuthCheck';
 import { useAuthStore } from '../../stores/auth.store';
+import { useDetectionStore } from '../../stores/detection.store';
+import { useDetectionPolling } from '../../hooks/useDetectionPolling';
 import type { DetectionResponse } from '../../types/detection.types';
-import type { DetectionResult as FileDetectionResult } from '../../types/file-detection.types';
+import type { QueryDetectionResponse } from '../../types/file-detection.types';
+import toast from 'react-hot-toast';
 
 interface LocationState {
   text?: string;
   startDetection?: boolean;
+  taskId?: string;
+  fileName?: string;
+  fromUpload?: boolean;
 }
 
 export const DetectionPage: React.FC = () => {
   const location = useLocation();
   const state = location.state as LocationState;
-  const { user } = useAuthStore();
+  const { user, updateBenefits } = useAuthStore();
   
   const [text, setText] = useState(state?.text || '');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [result, setResult] = useState<DetectionResponse | null>(null);
-  const [fileResult, setFileResult] = useState<FileDetectionResult | null>(null);
+  const [fileResult, setFileResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(state?.taskId || null);
   const { checkAuth } = useAuthCheck();
 
-  useEffect(() => {
-    if (state?.startDetection && text) {
-      handleDetection();
-    }
-  }, []);
+  const { wordCount, setDetectionInfo, reset } = useDetectionStore();
 
+  // Memoize task IDs for polling
+  const taskIds = useMemo(() => {
+    if (!currentTaskId) return [];
+    return [currentTaskId];
+  }, [currentTaskId]);
+
+  // Handle polling results callback
+  const handlePollingResults = useCallback(async (response: QueryDetectionResponse) => {
+    if (!currentTaskId) return;
+
+    const result = response.data.results.find(r => r.taskId === currentTaskId);
+    if (!result) return;
+
+    if (result.state === 3) { // Completed
+      setFileResult(result);
+      setIsProcessing(false);
+      setCurrentTaskId(null); // Stop polling
+      
+      // Update user benefits after successful detection
+      try {
+        await updateBenefits();
+      } catch (error) {
+        console.error('Failed to update benefits:', error);
+      }
+    } else if (result.state === -1) { // Failed
+      setError('检测失败，请重试');
+      setIsProcessing(false);
+      setShowResult(false);
+      setCurrentTaskId(null); // Stop polling
+      toast.error('检测失败，请重试');
+    }
+  }, [currentTaskId, updateBenefits]);
+
+  // Use polling hook for file upload detection
+  useDetectionPolling(taskIds, handlePollingResults);
+
+  // Handle text detection
   const handleDetection = async () => {
-    // Check authentication before proceeding
     if (!checkAuth()) return;
 
     try {
       setIsProcessing(true);
+      setShowResult(true);
       setError(null);
 
-      // Validate content before sending
       detectionService.validateContent(text);
-
-      // Send detection request
       const response = await detectionService.detectText(text);
       
       if (response.data) {
         setResult(response.data);
-        setShowResult(true);
+        // Update user benefits after successful text detection
+        await updateBenefits();
+      } else {
+        throw new Error('检测失败，请重试');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Detection failed');
+      setError(err instanceof Error ? err.message : '检测失败');
       setShowResult(false);
+      toast.error(err instanceof Error ? err.message : '检测失败，请重试');
     } finally {
       setIsProcessing(false);
     }
@@ -65,48 +107,45 @@ export const DetectionPage: React.FC = () => {
   const handleFileUploadComplete = async (taskId: string, wordCount: number, fileName: string) => {
     try {
       setIsProcessing(true);
+      setShowResult(true);
       setError(null);
+      setCurrentTaskId(taskId); // Set current task ID for polling
 
-      // Submit file detection task
-      const response = await fileDetectionService.submitDetection({
+      setDetectionInfo({
+        taskId,
+        wordCount,
+        fileName
+      });
+
+      await fileDetectionService.submitDetection({
         taskId,
         userId: user?.id || '123',
         title: fileName,
         wordCount
       });
-
-      // Start polling for results
-      const pollInterval = setInterval(async () => {
-        const queryResponse = await fileDetectionService.queryResults({
-          taskIds: [response.data.taskId]
-        });
-
-        const result = queryResponse.data.results[0];
-        if (result.state === 3) { // Completed
-          clearInterval(pollInterval);
-          setFileResult(result);
-          setShowResult(true);
-        } else if (result.state === -1) { // Failed
-          clearInterval(pollInterval);
-          setError('文件检测失败，请重试');
-        }
-      }, 3000);
-
-      // Clear interval after 5 minutes (timeout)
-      setTimeout(() => {
-        clearInterval(pollInterval);
-        if (!fileResult) {
-          setError('检测超时，请重试');
-        }
-      }, 5 * 60 * 1000);
-
     } catch (err) {
       setError(err instanceof Error ? err.message : '文件检测失败');
       setShowResult(false);
-    } finally {
       setIsProcessing(false);
+      setCurrentTaskId(null);
+      toast.error('文件检测失败，请重试');
     }
   };
+
+  // Start detection if coming from another page
+  useEffect(() => {
+    if (state?.startDetection && text) {
+      handleDetection();
+    }
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      reset();
+      setCurrentTaskId(null);
+    };
+  }, [reset]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -134,14 +173,21 @@ export const DetectionPage: React.FC = () => {
           </div>
 
           {/* Results Section */}
-          {showResult && (result || fileResult) && (
+          {showResult && (
             <div className="bg-white rounded-xl shadow-sm p-6">
-              <DetectionResult 
-                aiScore={result?.ai_score || fileResult?.similarity || 0}
-                humanScore={result?.human_score || (1 - (fileResult?.similarity || 0))}
-                text={text}
-                reportUrl={fileResult?.zipurl}
-              />
+              {isProcessing ? (
+                <DetectionLoading />
+              ) : (
+                result || fileResult ? (
+                  <DetectionResult 
+                    aiScore={result?.ai_score || fileResult?.similarity || 0}
+                    humanScore={result?.human_score || (1 - (fileResult?.similarity || 0))}
+                    text={text}
+                    reportUrl={fileResult?.zipurl}
+                    wordCount={wordCount || text.length}
+                  />
+                ) : null
+              )}
             </div>
           )}
 

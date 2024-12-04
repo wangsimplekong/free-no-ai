@@ -1,5 +1,7 @@
-import nodemailer from 'nodemailer';
+import { createTransport } from 'nodemailer';
+import RPCClient from '@alicloud/pop-core';
 import { logger } from '../logger';
+import crypto from 'crypto';
 
 export interface EmailConfig {
   from: string;
@@ -14,26 +16,42 @@ export const DEFAULT_EMAIL_CONFIG: EmailConfig = {
   expiresIn: 15
 };
 
-// Create Gmail transporter
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD
-  }
+// 配置常量
+const EMAIL_CONFIG = {
+  from: process.env.EMAIL_FROM ,
+  fromAlias: process.env.EMAIL_FROM_ALIAS ,
+  accessKey: process.env.ALIYUN_ACCESS_KEY ,
+  secretKey: process.env.ALIYUN_SECRET_KEY ,
+  region: process.env.ALIYUN_REGION
+};
+
+// 创建阿里云 DirectMail 客户端
+const client = new RPCClient({
+  accessKeyId: EMAIL_CONFIG.accessKey,
+  accessKeySecret: EMAIL_CONFIG.secretKey,
+  endpoint: `https://dm.${EMAIL_CONFIG.region}.aliyuncs.com`,
+  apiVersion: '2015-11-23'
 });
 
 export const sendEmail = async (
-  to: string,
-  code: string,
-  config: EmailConfig = DEFAULT_EMAIL_CONFIG
+    to: string,
+    code: string,
+    config: EmailConfig = DEFAULT_EMAIL_CONFIG
 ): Promise<boolean> => {
+  const requestId = crypto.randomBytes(4).toString('hex');
+
   try {
-    const mailOptions = {
-      from: config.from,
-      to,
-      subject: config.subject,
-      html: `
+    logger.info(`[EMAIL][${requestId}] Preparing to send email - To: ${to}, Subject: ${config.subject}`);
+
+    const params = {
+      AccountName: EMAIL_CONFIG.from,
+      FromAlias: EMAIL_CONFIG.fromAlias,
+      AddressType: 1,
+      TagName: 'verification',
+      ReplyToAddress: false,
+      ToAddress: to,
+      Subject: config.subject,
+      HtmlBody: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #333;">Verification Code</h2>
           <p style="color: #666; font-size: 16px;">Your verification code is:</p>
@@ -48,21 +66,21 @@ export const sendEmail = async (
       `
     };
 
-    const info = await transporter.sendMail(mailOptions);
+    logger.debug(`[EMAIL][${requestId}] Mail options:`, params);
 
-    logger.info('Email sent successfully', {
-      messageId: info.messageId,
-      to,
-      subject: config.subject
-    });
+    const result = await client.request('SingleSendMail', params, { method: 'POST' });
+
+    logger.info(`[EMAIL][${requestId}] Email sent successfully - To: ${to}`);
 
     return true;
   } catch (error) {
-    logger.error('Failed to send email', {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+    logger.error(`[EMAIL][${requestId}] Failed to send email - To: ${to}, Error: ${errorMessage}`, {
       error,
-      to,
       config
     });
+
     throw new Error('Failed to send email verification code');
   }
 };
@@ -74,6 +92,6 @@ export const validateEmail = (email: string): boolean => {
 
 export const generateVerificationCode = (length: number = 6): string => {
   return Math.random()
-    .toString()
-    .slice(2, 2 + length);
+      .toString()
+      .slice(2, 2 + length);
 };

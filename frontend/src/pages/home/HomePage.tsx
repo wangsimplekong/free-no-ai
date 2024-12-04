@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Shield, Languages, FileText, RefreshCw, Upload } from 'lucide-react';
+import { Shield, Languages, FileText, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../../components/layout/Header';
+import { FileUploadSection } from '../../components/home/FileUploadSection';
 import { useAuthStore } from '../../stores/auth.store';
 import { useLoginModal } from '../../hooks/useLoginModal';
 
@@ -62,13 +63,7 @@ export const HomePage = () => {
               </div>
             </div>
             <div className="mt-4 flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <button className="flex items-center space-x-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50">
-                  <Upload className="h-5 w-5 text-gray-500" />
-                  <span>上传文件</span>
-                </button>
-                <p className="text-sm text-gray-500">支持 PDF、Word、TXT</p>
-              </div>
+              <FileUploadSection />
               <button
                 onClick={handleDetectionStart}
                 disabled={!text || text.length > 2000}

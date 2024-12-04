@@ -15,8 +15,8 @@ export const paymentValidator = {
   paymentCallback: [
     body('order_id').notEmpty().withMessage('订单号不能为空'),
     body('trade_no').notEmpty().withMessage('交易号不能为空'),
-    body('trade_status')
-      .isIn(['SUCCESS', 'FAILED'])
+    body('pay_status')
+      .isIn(['0', '-1'])
       .withMessage('无效的交易状态'),
     body('sign').notEmpty().withMessage('签名不能为空')
   ],

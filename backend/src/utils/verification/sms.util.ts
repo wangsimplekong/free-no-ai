@@ -21,36 +21,34 @@ async function retryRequest(fn: () => Promise<any>, retries = 3, delay = 1000): 
     return await fn();
   } catch (error) {
     if (retries === 0) throw error;
-    
+
     logger.warn('Retrying SMS request after error', {
       retriesLeft: retries - 1,
       delay,
       error: error instanceof Error ? error.message : 'Unknown error'
     });
-    
+
     await new Promise(resolve => setTimeout(resolve, delay));
     return retryRequest(fn, retries - 1, delay * 2);
   }
 }
 
 export const sendSMS = async (
-  phone: string,
-  code: string,
-  templateId?: string // Kept for backwards compatibility
+    phone: string,
+    code: string,
+    templateId?: string
 ): Promise<boolean> => {
+  const requestId = crypto.randomBytes(4).toString('hex');
+
   try {
-    logger.info('Preparing to send SMS', {
-      phone,
-      templateCode: smsConfig.templateCode,
-      appName: smsConfig.appName
-    });
+    logger.info(`[SMS][${requestId}] Preparing to send SMS - Phone: ${phone}, Template: ${smsConfig.templateCode}`);
 
     const timestamp = Math.floor(Date.now() / 1000).toString();
     const signature = generateSignature(
-      smsConfig.templateCode,
-      phone,
-      smsConfig.appName,
-      timestamp
+        smsConfig.templateCode,
+        phone,
+        smsConfig.appName,
+        timestamp
     );
 
     const payload = {
@@ -64,62 +62,31 @@ export const sendSMS = async (
 
     const url = `${smsConfig.gatewayUrl}?key=${smsConfig.gatewayKey}`;
 
-    logger.debug('SMS Gateway request details', {
-      url: smsConfig.gatewayUrl,
-      templateCode: smsConfig.templateCode,
-      appName: smsConfig.appName,
-      timestamp: new Date().toISOString(),
-      requestId: crypto.randomBytes(8).toString('hex')
-    });
+    logger.debug(`[SMS][${requestId}] Request payload: ${JSON.stringify(payload)}`);
 
     const response = await retryRequest(async () => {
       const resp = await smsClient.post(url, payload);
       return resp;
     });
 
-    logger.info('SMS Gateway response received', {
-      phone,
-      statusCode: response.status,
-      responseData: response.data,
-      timestamp: new Date().toISOString()
-    });
+    logger.info(`[SMS][${requestId}] Response received - Status: ${response.status}, Data: ${JSON.stringify(response.data)}`);
 
     if (response.status !== 200) {
       throw new Error(`SMS gateway returned status ${response.status}`);
     }
 
-    // if (!response.data.success) {
-    //   throw new Error(response.data.message || 'SMS sending failed');
-    // }
-
     return true;
   } catch (error) {
-    logger.error(error)
-    const isAxiosError = axios.isAxiosError(error);
-    const errorDetails = {
-      message: error instanceof Error ? error.message : 'Unknown error',
-      code: isAxiosError ? error.code : undefined,
-      response: isAxiosError ? error.response?.data : undefined,
-      status: isAxiosError ? error.response?.status : undefined,
-      config: {
-        url: smsConfig.gatewayUrl,
-        templateCode: smsConfig.templateCode,
-        appName: smsConfig.appName
-      },
-      timestamp: new Date().toISOString()
-    };
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorDetails = axios.isAxiosError(error)
+        ? JSON.stringify({
+          response: error.response?.data,
+          status: error.response?.status
+        })
+        : '';
 
-    logger.error('Failed to send SMS', {
-      error: errorDetails,
-      phone,
-      stack: error instanceof Error ? error.stack : undefined
-    });
-
-    throw new Error(
-      isAxiosError && error.response 
-        ? `SMS Gateway Error: ${error.response.data?.message || error.message}`
-        : 'Failed to send SMS verification code'
-    );
+    logger.error(`[SMS][${requestId}] Failed to send SMS - Phone: ${phone}, Error: ${errorMessage} ${errorDetails}`);
+    throw error;
   }
 };
 

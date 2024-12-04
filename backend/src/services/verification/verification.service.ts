@@ -57,9 +57,9 @@ export class VerificationService {
 
       // Send verification code
       if (type === VerifyType.SMS) {
-        // await sendSMS(recipient, code);
+        await sendSMS(recipient, code);
       } else if (type === VerifyType.EMAIL) {
-        // await sendEmail(recipient, code);
+         await sendEmail(recipient, code);
       }
 
       logger.info('Verification code sent successfully', {

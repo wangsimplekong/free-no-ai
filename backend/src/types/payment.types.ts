@@ -5,6 +5,7 @@ export interface PaymentRequest {
   body: string;
   amount: number;
   userId: string;
+  payType: number;
 }
 
 export interface PaymentResponse {
@@ -19,7 +20,7 @@ export interface PaymentResponse {
 export interface PaymentCallback {
   order_id: string;
   trade_no: string;
-  trade_status: 'SUCCESS' | 'FAILED';
+  pay_status: number;
   sign: string;
   [key: string]: any;
 }

@@ -1,19 +1,20 @@
 import React from 'react';
-import { CircularProgress } from './CircularProgress';
-import { Download, Share2 } from 'lucide-react';
+import { Download } from 'lucide-react';
 
 interface DetectionResultProps {
   aiScore: number;
   humanScore: number;
   text: string;
   reportUrl?: string;
+  wordCount: number;
 }
 
 export const DetectionResult: React.FC<DetectionResultProps> = ({
   aiScore,
   humanScore,
   text,
-  reportUrl
+  reportUrl,
+  wordCount
 }) => {
   const getScoreColor = (score: number) => {
     if (score >= 0.8) return 'red';
@@ -34,10 +35,45 @@ export const DetectionResult: React.FC<DetectionResultProps> = ({
         <div className="bg-gray-50 rounded-lg p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-medium">AI生成概率</h3>
-            <CircularProgress 
-              value={formattedAiScore} 
-              color={getScoreColor(aiScore)}
-            />
+            <div className={`relative inline-flex items-center justify-center`}>
+              <svg className="transform -rotate-90 w-20 h-20">
+                <circle
+                  cx="40"
+                  cy="40"
+                  r="30"
+                  stroke="currentColor"
+                  strokeWidth="8"
+                  fill="transparent"
+                  className="text-gray-200"
+                />
+                <circle
+                  cx="40"
+                  cy="40"
+                  r="30"
+                  stroke="currentColor"
+                  strokeWidth="8"
+                  fill="transparent"
+                  strokeDasharray={2 * Math.PI * 30}
+                  strokeDashoffset={2 * Math.PI * 30 * (1 - aiScore)}
+                  className={`${
+                    getScoreColor(aiScore) === 'red'
+                      ? 'text-red-500'
+                      : getScoreColor(aiScore) === 'yellow'
+                      ? 'text-yellow-500'
+                      : 'text-green-500'
+                  } transition-all duration-1000 ease-out`}
+                />
+              </svg>
+              <span className={`absolute text-xl font-semibold ${
+                getScoreColor(aiScore) === 'red'
+                  ? 'text-red-500'
+                  : getScoreColor(aiScore) === 'yellow'
+                  ? 'text-yellow-500'
+                  : 'text-green-500'
+              }`}>
+                {formattedAiScore}%
+              </span>
+            </div>
           </div>
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
@@ -46,7 +82,7 @@ export const DetectionResult: React.FC<DetectionResultProps> = ({
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">文本长度</span>
-              <span>{text.length}字</span>
+              <span>{wordCount}字</span>
             </div>
           </div>
         </div>
@@ -55,10 +91,45 @@ export const DetectionResult: React.FC<DetectionResultProps> = ({
         <div className="bg-gray-50 rounded-lg p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-medium">真人撰写概率</h3>
-            <CircularProgress 
-              value={formattedHumanScore}
-              color={getScoreColor(humanScore)}
-            />
+            <div className="relative inline-flex items-center justify-center">
+              <svg className="transform -rotate-90 w-20 h-20">
+                <circle
+                  cx="40"
+                  cy="40"
+                  r="30"
+                  stroke="currentColor"
+                  strokeWidth="8"
+                  fill="transparent"
+                  className="text-gray-200"
+                />
+                <circle
+                  cx="40"
+                  cy="40"
+                  r="30"
+                  stroke="currentColor"
+                  strokeWidth="8"
+                  fill="transparent"
+                  strokeDasharray={2 * Math.PI * 30}
+                  strokeDashoffset={2 * Math.PI * 30 * (1 - humanScore)}
+                  className={`${
+                    getScoreColor(humanScore) === 'red'
+                      ? 'text-red-500'
+                      : getScoreColor(humanScore) === 'yellow'
+                      ? 'text-yellow-500'
+                      : 'text-green-500'
+                  } transition-all duration-1000 ease-out`}
+                />
+              </svg>
+              <span className={`absolute text-xl font-semibold ${
+                getScoreColor(humanScore) === 'red'
+                  ? 'text-red-500'
+                  : getScoreColor(humanScore) === 'yellow'
+                  ? 'text-yellow-500'
+                  : 'text-green-500'
+              }`}>
+                {formattedHumanScore}%
+              </span>
+            </div>
           </div>
           <div className="mt-4">
             <div className="flex items-center justify-between mb-2">
@@ -88,26 +159,17 @@ export const DetectionResult: React.FC<DetectionResultProps> = ({
       </div>
 
       {/* Actions */}
-      <div className="flex justify-end space-x-4 pt-4 border-t border-gray-100">
-        <button className="flex items-center space-x-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50">
-          <Share2 className="w-4 h-4" />
-          <span>分享结果</span>
-        </button>
-        {reportUrl ? (
+      <div className="flex justify-end pt-4 border-t border-gray-100">
+        {reportUrl && (
           <a
             href={reportUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center space-x-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50"
+            className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Download className="w-4 h-4" />
             <span>下载报告</span>
           </a>
-        ) : (
-          <button className="flex items-center space-x-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50">
-            <Download className="w-4 h-4" />
-            <span>下载结果</span>
-          </button>
         )}
       </div>
     </div>

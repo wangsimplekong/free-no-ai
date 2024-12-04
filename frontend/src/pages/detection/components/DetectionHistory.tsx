@@ -1,14 +1,46 @@
-import React, { useState, useEffect } from 'react';
-import { FileText, Download, ExternalLink } from 'lucide-react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { FileText, Download, Loader2 } from 'lucide-react';
 import { fileDetectionService } from '../../../services/file-detection.service';
+import { useDetectionPolling } from '../../../hooks/useDetectionPolling';
 import type { DetectionHistoryItem } from '../../../types/file-detection.types';
+import type { QueryDetectionResponse } from '../../../types/file-detection.types';
 
 export const DetectionHistory: React.FC = () => {
-  const [history, setHistory] = useState<DetectionHistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<DetectionHistoryItem[]>([]);
+  const [total, setTotal] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
+
+  // Extract unfinished task IDs for polling
+  const unfinishedTaskIds = useMemo(() => {
+    return history
+      .filter(item => item.status !== 3 && item.status !== -1)
+      .map(item => item.taskId);
+  }, [history]);
+
+  // Callback to handle polling results
+  const handlePollingResults = useCallback((response: QueryDetectionResponse) => {
+    setHistory(prevHistory => {
+      return prevHistory.map(item => {
+        const result = response.data.results.find(r => r.taskId === item.taskId);
+        if (result) {
+          return {
+            ...item,
+            status: result.state,
+            aiProbability: result.similarity,
+            reportUrl: result.zipurl,
+            detailUrl: result.zipurl
+          };
+        }
+        return item;
+      });
+    });
+  }, []);
+
+  // Use the polling hook
+  useDetectionPolling(unfinishedTaskIds, handlePollingResults);
 
   const fetchHistory = async () => {
     try {
@@ -18,15 +50,10 @@ export const DetectionHistory: React.FC = () => {
         pageNum: currentPage,
         pageSize,
       });
-      
-      if (response.code === 200 && response.data) {
-        setHistory(response.data.list || []);
-      } else {
-        throw new Error(response.message || '获取历史记录失败');
-      }
+      setHistory(response.data.list);
+      setTotal(response.data.total);
     } catch (err) {
       setError(err instanceof Error ? err.message : '获取历史记录失败');
-      console.error('Failed to fetch detection history:', err);
     } finally {
       setLoading(false);
     }
@@ -36,17 +63,54 @@ export const DetectionHistory: React.FC = () => {
     fetchHistory();
   }, [currentPage]);
 
-  if (loading) {
-    return <div className="text-center py-4">加载中...</div>;
+  const getStatusDisplay = (status: number, taskId: string) => {
+    const isPolling = unfinishedTaskIds.includes(taskId);
+
+    if (isPolling) {
+      return (
+        <span className="inline-flex items-center text-blue-600">
+          <Loader2 className="w-4 h-4 animate-spin mr-1" />
+          处理中
+        </span>
+      );
+    }
+
+    switch (status) {
+      case 3:
+        return <span className="text-green-600">已完成</span>;
+      case 1:
+        return <span className="text-blue-600">处理中</span>;
+      case -1:
+        return <span className="text-red-600">失败</span>;
+      case 0:
+        return <span className="text-yellow-600">等待中</span>;
+      default:
+        return <span className="text-gray-600">未知</span>;
+    }
+  };
+
+  if (loading && !history.length) {
+    return <div className="text-center py-8">加载中...</div>;
   }
 
   if (error) {
-    return <div className="text-center text-red-500 py-4">{error}</div>;
+    return <div className="text-center text-red-600 py-8">{error}</div>;
+  }
+
+  if (!history.length) {
+    return <div className="text-center text-gray-500 py-8">暂无检测历史记录</div>;
   }
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold">检测历史</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">检测历史</h2>
+        {unfinishedTaskIds.length > 0 && (
+          <div className="text-sm text-gray-500">
+            正在更新检测结果...
+          </div>
+        )}
+      </div>
       
       <div className="overflow-x-auto">
         <table className="w-full">
@@ -55,7 +119,7 @@ export const DetectionHistory: React.FC = () => {
               <th className="py-4 px-4 text-left font-medium text-gray-500">检测时间</th>
               <th className="py-4 px-4 text-left font-medium text-gray-500">文本/文件</th>
               <th className="py-4 px-4 text-left font-medium text-gray-500">字数统计</th>
-              <th className="py-4 px-4 text-left font-medium text-gray-500">AI概率</th>
+              <th className="py-4 px-4 text-left font-medium text-gray-500">状态</th>
               <th className="py-4 px-4 text-right font-medium text-gray-500">操作</th>
             </tr>
           </thead>
@@ -69,50 +133,51 @@ export const DetectionHistory: React.FC = () => {
                     <span className="text-sm">{item.title}</span>
                   </div>
                 </td>
-                <td className="py-4 px-4 text-sm">{item.wordCount}</td>
-                <td className="py-4 px-4">
-                  <div className="flex items-center">
-                    <div className="w-full bg-gray-200 rounded-full h-2.5">
-                      <div
-                        className="bg-blue-600 h-2.5 rounded-full"
-                        style={{ width: `${item.aiProbability}%` }}
-                      ></div>
-                    </div>
-                    <span className="ml-2 text-sm">{item.aiProbability}%</span>
-                  </div>
+                <td className="py-4 px-4 text-sm">
+                  {item.wordCount.toLocaleString()}字
                 </td>
-                <td className="py-4 px-4 text-right space-x-2">
-                  {item.reportUrl && (
-                    <a
-                      href={item.reportUrl}
-                      download
-                      className="inline-flex items-center text-gray-500 hover:text-gray-700"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <Download className="w-4 h-4" />
-                    </a>
-                  )}
-                  {item.detailUrl && (
-                    <a
-                      href={item.detailUrl}
-                      className="inline-flex items-center text-gray-500 hover:text-gray-700"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                    </a>
-                  )}
+                <td className="py-4 px-4 text-sm">
+                  {getStatusDisplay(item.status, item.taskId)}
+                </td>
+                <td className="py-4 px-4">
+                  <div className="flex justify-end">
+                    {item.reportUrl && (
+                      <a
+                        href={item.reportUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-gray-500 hover:text-gray-700"
+                      >
+                        <Download className="w-4 h-4" />
+                      </a>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      
-      {history.length === 0 && (
-        <div className="text-center py-8 text-gray-500">
-          暂无检测历史
+
+      {total > pageSize && (
+        <div className="flex justify-end mt-4 space-x-2">
+          <button
+            className="px-3 py-1 border rounded disabled:opacity-50"
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage(p => p - 1)}
+          >
+            上一页
+          </button>
+          <span className="px-3 py-1">
+            第 {currentPage} 页 / 共 {Math.ceil(total / pageSize)} 页
+          </span>
+          <button
+            className="px-3 py-1 border rounded disabled:opacity-50"
+            disabled={currentPage >= Math.ceil(total / pageSize)}
+            onClick={() => setCurrentPage(p => p + 1)}
+          >
+            下一页
+          </button>
         </div>
       )}
     </div>
