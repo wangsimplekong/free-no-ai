@@ -1,8 +1,15 @@
 import { supabase } from '../../config/database';
 import { UserBenefits } from '../../types/benefits.types';
 import { logger } from '../../utils/logger';
+import { QuotaModel } from '../../models/quota.model';
 
 export class BenefitsService {
+  private quotaModel: QuotaModel;
+
+  constructor() {
+    this.quotaModel = new QuotaModel();
+  }
+
   async getUserBenefits(userId: string): Promise<UserBenefits | null> {
     try {
       // Get current membership info
@@ -32,15 +39,7 @@ export class BenefitsService {
       }
 
       // Get quota information
-      const { data: quotaData, error: quotaError } = await supabase
-        .from('t_user_quota')
-        .select('*')
-        .eq('user_id', userId)
-        .in('quota_type', [1, 2]); // 1: detection, 2: rewrite
-
-      if (quotaError) {
-        throw new Error('Failed to fetch quota data');
-      }
+      const quotaData = await this.quotaModel.getUserQuotas(userId);
 
       // Process detection quota
       const detectionQuota = quotaData?.find(q => q.quota_type === 1) || {

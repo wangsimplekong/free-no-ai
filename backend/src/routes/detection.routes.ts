@@ -32,6 +32,7 @@ router.use((req, res, next) => {
 // Text detection routes (existing)
 router.post(
   '/text',
+  authMiddleware,
   detectionValidator.detectText,
   validateRequest,
   aigcController.detectText

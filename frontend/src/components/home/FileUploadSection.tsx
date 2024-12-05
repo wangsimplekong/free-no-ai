@@ -20,7 +20,7 @@ export const FileUploadSection: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, updateBenefits } = useAuthStore();
   const { openLoginModal } = useLoginModal();
 
   const validateFile = (file: File): string | null => {
@@ -70,7 +70,10 @@ export const FileUploadSection: React.FC = () => {
         wordCount: parseResult.data.wordCount,
       });
 
-      // 5. Navigate to detection page with taskId
+      // 5. Update user benefits after successful detection
+      await updateBenefits();
+
+      // 6. Navigate to detection page with taskId
       navigate('/detection', { 
         state: { 
           taskId,

@@ -17,11 +17,11 @@ export const PaymentButton: React.FC<PaymentButtonProps> = ({ order, onSuccess }
       setLoading(true);
       const response = await paymentService.completePayment(order.id);
       
-      if (response.code === 200) {
+      if (response.data.code === 200) {
         toast.success('支付完成');
         onSuccess();
       } else {
-        throw new Error(response.message || '支付失败');
+        throw new Error(response.data.message || '支付失败');
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '支付失败，请重试');

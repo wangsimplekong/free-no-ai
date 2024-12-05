@@ -25,11 +25,16 @@ export class OrderService {
 
     // Calculate used days since plan creation
     const now = new Date();
-    const startDate = new Date(currentPlan.created_at);
-    const usedDays = Math.ceil((now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+    const startDate = new Date(currentPlan.createdTime);
+    
+    // Reset time part to get accurate date difference
+    const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const planStartDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+    
+    const usedDays = Math.floor((nowDate.getTime() - planStartDate.getTime()) / (1000 * 60 * 60 * 24));
 
     // Calculate total days in period
-    const totalDays = currentPlan.period_type === 1 ? 30 : 365;
+    const totalDays = Math.floor((new Date(currentPlan.expireTime).getTime() - new Date(currentPlan.createdTime).getTime()) / (1000 * 60 * 60 * 24));
     
     // Calculate remaining days
     const remainingDays = Math.max(totalDays - usedDays, 0);
@@ -72,7 +77,13 @@ export class OrderService {
 
       // diff amount
       if (currentBenefits?.membership) {
-        const currentPlan = await this.memberPlanService.getPlanById(currentBenefits?.membership.planId);
+        const current = await this.memberPlanService.getPlanById(currentBenefits?.membership.planId);
+
+        const currentPlan = {
+          ...current,
+          createdTime: currentBenefits?.membership.createdTime,
+          expireTime: currentBenefits?.membership.expireTime
+        }
 
         // Validate upgrade path
         if (!this.isValidUpgrade(currentPlan, targetPlan)) {

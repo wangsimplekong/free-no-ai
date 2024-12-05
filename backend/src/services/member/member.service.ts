@@ -11,9 +11,11 @@ import { supabase } from '../../config/database';
 
 export class MemberService {
   private paymentService: PaymentService;
+  private quotaModel: QuotaModel;
 
   constructor() {
     this.paymentService = new PaymentService();
+    this.quotaModel = new QuotaModel();
   }
 
   async subscribe(userId: string, dto: SubscribeDTO): Promise<SubscribeResponseDTO> {
@@ -105,46 +107,44 @@ export class MemberService {
       // Initialize quotas
       const quotaPromises = [
         // Detection quota
-        supabase.from('t_user_quota').upsert({
+        this.quotaModel.upsertQuota({
           user_id: userId,
           quota_type: QuotaType.DETECTION,
           total_quota: plan.detection_quota * dto.duration,
           used_quota: 0,
           expire_time: expireTime.toISOString()
-        }, { onConflict: 'user_id,quota_type' }),
+        }),
 
         // Rewrite quota
-        supabase.from('t_user_quota').upsert({
+        this.quotaModel.upsertQuota({
           user_id: userId,
           quota_type: QuotaType.REWRITE,
           total_quota: plan.rewrite_quota * dto.duration,
           used_quota: 0,
           expire_time: expireTime.toISOString()
-        }, { onConflict: 'user_id,quota_type' }),
+        }),
 
         // Quota records
-        supabase.from('t_quota_record').insert([
-          {
-            user_id: userId,
-            quota_type: QuotaType.DETECTION,
-            change_type: QuotaChangeType.RECHARGE,
-            change_amount: plan.detection_quota * dto.duration,
-            before_amount: 0,
-            after_amount: plan.detection_quota * dto.duration,
-            order_id: orderId,
-            remark: `Initial detection quota for plan ${plan.name}`
-          },
-          {
-            user_id: userId,
-            quota_type: QuotaType.REWRITE,
-            change_type: QuotaChangeType.RECHARGE,
-            change_amount: plan.rewrite_quota * dto.duration,
-            before_amount: 0,
-            after_amount: plan.rewrite_quota * dto.duration,
-            order_id: orderId,
-            remark: `Initial rewrite quota for plan ${plan.name}`
-          }
-        ])
+        this.quotaModel.createQuotaRecord({
+          user_id: userId,
+          quota_type: QuotaType.DETECTION,
+          change_type: QuotaChangeType.RECHARGE,
+          change_amount: plan.detection_quota * dto.duration,
+          before_amount: 0,
+          after_amount: plan.detection_quota * dto.duration,
+          order_id: orderId,
+          remark: `Initial detection quota for plan ${plan.name}`
+        }),
+        this.quotaModel.createQuotaRecord({
+          user_id: userId,
+          quota_type: QuotaType.REWRITE,
+          change_type: QuotaChangeType.RECHARGE,
+          change_amount: plan.rewrite_quota * dto.duration,
+          before_amount: 0,
+          after_amount: plan.rewrite_quota * dto.duration,
+          order_id: orderId,
+          remark: `Initial rewrite quota for plan ${plan.name}`
+        })
       ];
 
       const results = await Promise.all(quotaPromises);

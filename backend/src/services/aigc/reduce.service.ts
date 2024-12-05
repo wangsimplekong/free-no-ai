@@ -2,12 +2,16 @@ import { createHttpClient } from '../../utils/http.util';
 import { aigcConfig } from '../../config/aigc.config';
 import { logger } from '../../utils/logger';
 import { OpenAIRequest, OpenAIResponse } from '../../types/aigc.types';
+import { QuotaModel } from '../../models/quota.model';
+import { QuotaType, QuotaChangeType } from '../../types/member.types';
 
 export class AigcReduceService {
   private httpClient;
+  private quotaModel: QuotaModel;
 
   constructor() {
     this.httpClient = createHttpClient(aigcConfig.apiUrl, aigcConfig.timeout);
+    this.quotaModel = new QuotaModel();
   }
 
   private validateText(text: string): void {
@@ -79,18 +83,31 @@ ${text}
     }];
   }
 
-  public async reduceText(text: string): Promise<string> {
+  public async reduceText(params: { content: string; userId: string }): Promise<{ result: string }> {
     try {
-      logger.info('Starting text reduction process', {
-        textLength: text.length,
+      const { content, userId } = params;
+      logger.info('Starting text reduction', {
+        contentLength: content.length,
+        userId,
         timestamp: new Date().toISOString()
       });
 
       // Validate and preprocess text
-      this.validateText(text);
-      const processedText = this.preprocessText(text);
+      this.validateText(content);
+      const processedText = this.preprocessText(content);
 
-      // First reduction
+      // Record quota usage before making the API call
+      const quotaParams = {
+        user_id: userId,
+        quota_type: QuotaType.REWRITE,
+        change_type: QuotaChangeType.CONSUME,
+        change_amount: processedText.length,
+        remark: `文本降重：${processedText.length}字`
+      };
+      logger.info('Creating quota record with params:', quotaParams);
+      await this.quotaModel.createQuotaRecord(quotaParams);
+
+      // Prepare messages for OpenAI
       const firstPrompt = this.buildFirstPrompt(processedText);
       const firstResult = await this.callOpenAI(firstPrompt);
 
@@ -104,7 +121,7 @@ ${text}
         if (qualityResult.status === 'error') {
           logger.warn('Quality check found issues', {
             issues: qualityResult.issues,
-            originalLength: text.length,
+            originalLength: content.length,
             reducedLength: firstResult.length
           });
           
@@ -126,15 +143,15 @@ ${firstResult}
             fixedLength: fixedResult.length
           });
           
-          return fixedResult;
+          return { result: fixedResult };
         } else {
           logger.info('Text reduction completed successfully', {
-            originalLength: text.length,
+            originalLength: content.length,
             reducedLength: firstResult.length,
             timestamp: new Date().toISOString()
           });
 
-          return firstResult;
+          return { result: firstResult };
         }
       } catch (error) {
         logger.error('Failed to parse quality check response', error);
@@ -144,7 +161,7 @@ ${firstResult}
       logger.error(error);
       logger.error('Text reduction failed', {
         error,
-        textLength: text.length,
+        contentLength: params.content.length,
         timestamp: new Date().toISOString()
       });
       throw error;

@@ -5,22 +5,26 @@ import { SignatureUtil } from '../../utils/payment/signature.util';
 import { OrderRepository } from '../../repositories/order/order.repository';
 import { PaymentRepository } from '../../repositories/order/payment.repository';
 import { supabase } from '../../config/database';
+import { QuotaModel } from '../../models/quota.model';
 import type {
   PaymentRequest,
   PaymentResponse,
   PaymentCallback,
   PaymentStatus,
 } from '../../types/payment.types';
+import { QuotaChangeType, QuotaType } from '../../types/member.types';
 
 export class PaymentService {
   private httpClient;
   private orderRepository: OrderRepository;
   private paymentRepository: PaymentRepository;
+  private quotaModel: QuotaModel;
 
   constructor() {
     this.httpClient = createHttpClient(paymentConfig.gateway.url);
     this.orderRepository = new OrderRepository();
     this.paymentRepository = new PaymentRepository();
+    this.quotaModel = new QuotaModel();
   }
 
   async createPayment(params: PaymentRequest): Promise<PaymentResponse> {
@@ -213,38 +217,24 @@ export class PaymentService {
       }
 
       // Update detection quota
-      const { error: detectionQuotaError } = await supabase
-        .from('t_user_quota')
-        .upsert({
-          user_id: order.user_id,
-          quota_type: 1,
-          total_quota: plan.detection_quota,
-          used_quota: 0,
-          expire_time: expireTime.toISOString(),
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-
-      if (detectionQuotaError) {
-        throw new Error('Failed to update detection quota');
-      }
+      await this.quotaModel.createQuotaRecord({
+        user_id: order.user_id,
+        quota_type: QuotaType.DETECTION,
+        change_type: QuotaChangeType.RECHARGE,
+        change_amount: plan.detection_quota,
+        expire_time: expireTime.toISOString(),
+        created_at: new Date().toISOString()
+      });
 
       // Update rewrite quota
-      const { error: rewriteQuotaError } = await supabase
-        .from('t_user_quota')
-        .upsert({
-          user_id: order.user_id,
-          quota_type: 2,
-          total_quota: plan.rewrite_quota,
-          used_quota: 0,
-          expire_time: expireTime.toISOString(),
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-
-      if (rewriteQuotaError) {
-        throw new Error('Failed to update rewrite quota');
-      }
+      await this.quotaModel.createQuotaRecord({
+        user_id: order.user_id,
+        quota_type: QuotaType.REWRITE,
+        change_type: QuotaChangeType.RECHARGE,
+        change_amount: plan.rewrite_quota,
+        expire_time: expireTime.toISOString(),
+        created_at: new Date().toISOString()
+      });
 
       logger.info('Payment completed successfully: ' + 
         'orderId: ' + orderId + 

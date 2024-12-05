@@ -1,5 +1,6 @@
 export interface DetectionRequest {
   content: string;
+  userId: string;
 }
 
 export interface DetectionResponse {

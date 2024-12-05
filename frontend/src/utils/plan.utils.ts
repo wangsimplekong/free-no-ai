@@ -16,10 +16,15 @@ export const calculateUpgradePrice = (
   // Calculate used days since plan creation
   const now = new Date();
   const startDate = new Date(currentPlan.createdTime);
-  const usedDays = Math.ceil((now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+  
+  // Reset time part to get accurate date difference
+  const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const planStartDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+  
+  const usedDays = Math.floor((nowDate.getTime() - planStartDate.getTime()) / (1000 * 60 * 60 * 24));
 
   // Calculate total days in period
-  const totalDays = currentPlan.period_type === 1 ? 30 : 365;
+  const totalDays = Math.floor((new Date(currentPlan.expireTime).getTime() - new Date(currentPlan.createdTime).getTime()) / (1000 * 60 * 60 * 24));
   
   // Calculate remaining days
   const remainingDays = Math.max(totalDays - usedDays, 0);

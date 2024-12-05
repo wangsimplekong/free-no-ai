@@ -15,7 +15,7 @@ export const ReductionPage: React.FC = () => {
   const [reducedText, setReducedText] = useState('');
   const [error, setError] = useState<string | null>(null);
   
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, updateBenefits } = useAuthStore();
   const { openLoginModal } = useLoginModal();
 
   const handleReduction = async () => {
@@ -37,6 +37,8 @@ export const ReductionPage: React.FC = () => {
       if (response.data?.text) {
         setReducedText(response.data.text);
         setShowResult(true);
+        // Update user benefits after successful reduction
+        await updateBenefits();
       } else {
         throw new Error('降重处理失败，请稍后重试');
       }
@@ -48,14 +50,20 @@ export const ReductionPage: React.FC = () => {
     }
   };
 
-  const handleProcessingComplete = (
+  const handleProcessingComplete = async (
     reductionTaskId: string,
     reduceUrl: string,
     recheckUrl: string
   ) => {
-    // Handle file reduction completion
-    setShowResult(true);
-    // You might want to show a different result view for file reductions
+    try {
+      // Handle file reduction completion
+      setShowResult(true);
+      // Update user benefits after successful file reduction
+      await updateBenefits();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '处理失败');
+      setShowResult(false);
+    }
   };
 
   const handleProcessingError = (error: string) => {

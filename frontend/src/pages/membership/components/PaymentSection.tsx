@@ -33,6 +33,7 @@ export const PaymentSection: React.FC<PaymentSectionProps> = ({
   const [payUrl, setPayUrl] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [pollTimeoutId, setPollTimeoutId] = useState<NodeJS.Timeout | null>(null);
+  const [isPolling, setIsPolling] = useState(true);
   const updateBenefits = useAuthStore(state => state.updateBenefits);
 
   const isUpgrade = currentPlan && isPlanUpgradable(currentPlan, selectedPlan);
@@ -63,28 +64,30 @@ export const PaymentSection: React.FC<PaymentSectionProps> = ({
   }, [onClose]);
 
   const pollOrderStatus = useCallback(async () => {
-    if (!orderId) return;
+    if (!orderId || !isPolling) return;
 
     try {
       const response = await orderService.getOrderDetail(orderId);
       const status = response.data.status;
 
       if (status === 3) { // Payment successful
+        setIsPolling(false);
         await handlePaymentComplete();
       } else if (status === 4) { // Payment failed
+        setIsPolling(false);
         handlePaymentFailed();
-      } else {
-        // Schedule next poll after 3 seconds
+      } else if (isPolling) { // Only continue polling if isPolling is true
         const timeoutId = setTimeout(pollOrderStatus, 3000);
         setPollTimeoutId(timeoutId);
       }
     } catch (error) {
       console.error('Failed to check order status:', error);
-      // Even on error, continue polling
-      const timeoutId = setTimeout(pollOrderStatus, 3000);
-      setPollTimeoutId(timeoutId);
+      if (isPolling) { // Only continue polling if isPolling is true
+        const timeoutId = setTimeout(pollOrderStatus, 3000);
+        setPollTimeoutId(timeoutId);
+      }
     }
-  }, [orderId, handlePaymentComplete, handlePaymentFailed]);
+  }, [orderId, handlePaymentComplete, handlePaymentFailed, isPolling]);
 
   const createOrder = useCallback(
     throttle(async () => {
@@ -102,6 +105,7 @@ export const PaymentSection: React.FC<PaymentSectionProps> = ({
 
         setPayUrl(response.data.payUrl);
         setOrderId(response.data.id);
+        setIsPolling(true); // 添加这行，确保开始轮询
         toast.success('订单创建成功！');
       } catch (err) {
         setError(err instanceof Error ? err.message : '创建订单失败，请重试');
@@ -133,6 +137,7 @@ export const PaymentSection: React.FC<PaymentSectionProps> = ({
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      setIsPolling(false);
       if (pollTimeoutId) {
         clearTimeout(pollTimeoutId);
       }

@@ -3,6 +3,7 @@ import { AigcReduceController } from '../controllers/aigc/reduce.controller';
 import { AigcReduceService } from '../services/aigc/reduce.service';
 import { validateRequest } from '../middlewares/validate.middleware';
 import { aigcValidator } from '../validators/aigc.validator';
+import { authMiddleware } from '../middlewares/auth.middleware';
 import { logger } from '../utils/logger';
 
 const router = Router();
@@ -24,6 +25,7 @@ router.use((req, res, next) => {
 // AIGC routes
 router.post(
   '/reduce/text',
+  authMiddleware,
   aigcValidator.reduceText,
   validateRequest,
   aigcController.reduceText

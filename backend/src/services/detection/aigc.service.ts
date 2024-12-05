@@ -2,12 +2,16 @@ import { createHttpClient } from '../../utils/http.util';
 import { logger } from '../../utils/logger';
 import { DetectionRequest, DetectionResponse } from '../../types/detection.types';
 import { detectionConfig } from '../../config/detection.config';
+import { QuotaModel } from '../../models/quota.model';
+import { QuotaType, QuotaChangeType } from '../../types/member.types';
 
 export class AigcDetectionService {
   private httpClient;
+  private quotaModel: QuotaModel;
 
   constructor() {
     this.httpClient = createHttpClient(detectionConfig.apiUrl, detectionConfig.timeout);
+    this.quotaModel = new QuotaModel();
   }
 
   async detectText(params: DetectionRequest): Promise<DetectionResponse> {
@@ -16,6 +20,17 @@ export class AigcDetectionService {
         contentLength: params.content.length,
         timestamp: new Date().toISOString()
       });
+
+      // Record quota usage before making the API call
+      const quotaParams = {
+        user_id: params.userId,
+        quota_type: QuotaType.DETECTION,
+        change_type: QuotaChangeType.CONSUME,
+        change_amount: params.content.length,
+        remark: `文本检测：${params.content.length}字`
+      };
+      logger.info('Creating quota record with params:', quotaParams);
+      await this.quotaModel.createQuotaRecord(quotaParams);
 
       const response = await this.httpClient.post<DetectionResponse>(
         `?key=${detectionConfig.apiKey}`,

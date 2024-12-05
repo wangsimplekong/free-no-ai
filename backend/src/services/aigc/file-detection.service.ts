@@ -4,6 +4,8 @@ import { logger } from '../../utils/logger';
 import { FileDetectionRepository, DetectionListResponse } from '../../repositories/file-detection.repository';
 import { DetectionTaskStatus } from '../../types/file-detection.types';
 import { DetectionListRequest } from '../../types/file-detection.types';
+import { QuotaModel } from '../../models/quota.model';
+import { QuotaType, QuotaChangeType } from '../../types/member.types';
 import {
   UploadSignatureResponse,
   ParseDocRequest,
@@ -18,6 +20,7 @@ import {
 export class AigcFileDetectionService {
   private httpClient;
   private detectionRepo: FileDetectionRepository;
+  private quotaModel: QuotaModel;
 
   constructor() {
     this.httpClient = createHttpClient(
@@ -25,6 +28,7 @@ export class AigcFileDetectionService {
       aigcFileConfig.timeout
     );
     this.detectionRepo = new FileDetectionRepository();
+    this.quotaModel = new QuotaModel();
   }
 
   async getUploadSignature(): Promise<UploadSignatureResponse> {
@@ -78,6 +82,8 @@ export class AigcFileDetectionService {
     params: FileDetectionRequest
   ): Promise<FileDetectionResponse> {
     try {
+      logger.info('Submitting detection with params:', params);
+      
       // Submit to third-party service
       const response = await this.httpClient.post(
         '/external/aigc-task/post',
@@ -107,6 +113,17 @@ export class AigcFileDetectionService {
       if (response.data.status !== '200') {
         throw new Error(response.data.message || 'Failed to submit detection');
       }
+
+      // Record quota usage
+      const quotaParams = {
+        user_id: params.userId,
+        quota_type: QuotaType.DETECTION,
+        change_type: QuotaChangeType.CONSUME,
+        change_amount: params.wordCount,
+        remark: `查重任务：${params.title}`
+      };
+      logger.info('Creating quota record with params:', quotaParams);
+      await this.quotaModel.createQuotaRecord(quotaParams);
 
       return { taskId: response.data.body };
     } catch (error) {

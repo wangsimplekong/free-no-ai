@@ -88,26 +88,18 @@ export const FileUploadReduction: React.FC<FileUploadReductionProps> = ({
         fileType: getFileType(file),
       });
 
-      // 4. Submit detection
-      setStatus(FileProcessingStatus.DETECTING);
-      const detectionResult = await fileReductionService.submitDetection({
-        taskId,
-        userId: '123',
-        title: file.name,
-        wordCount: parseResult.data.wordCount,
-      });
-
-      // 5. Submit reduction
+      // 4. Submit reduction
       setStatus(FileProcessingStatus.REDUCING);
       const reductionResult = await fileReductionService.submitReduction({
         taskId,
         userId: user?.id || '123',
         title: file.name,
         wordCount: parseResult.data.wordCount,
-        detectionId: detectionResult.data.taskId,
+        sourceFileUrl: signature.data.url,
+        sourceFileType: getFileType(file)
       });
 
-      // 6. Poll for results
+      // 5. Poll for results
       const pollInterval = setInterval(async () => {
         const queryResponse = await fileReductionService.queryResults({
           taskIds: [reductionResult.data.taskId],
@@ -239,8 +231,6 @@ export const FileUploadReduction: React.FC<FileUploadReductionProps> = ({
         return '正在上传文件...';
       case FileProcessingStatus.PARSING:
         return '正在解析文档...';
-      case FileProcessingStatus.DETECTING:
-        return '正在检测文本...';
       case FileProcessingStatus.REDUCING:
         return '正在降重处理...';
       case FileProcessingStatus.COMPLETED:

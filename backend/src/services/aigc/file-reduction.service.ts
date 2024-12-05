@@ -2,6 +2,7 @@ import { createHttpClient } from '../../utils/http.util';
 import { aigcFileConfig } from '../../config/aigc-file.config';
 import { logger } from '../../utils/logger';
 import { FileReductionRepository } from '../../repositories/file-reduction.repository';
+import { FileDetectionRepository } from '../../repositories/file-detection.repository';
 import {
   ReduceTaskStatus,
   ReduceListRequest,
@@ -11,18 +12,29 @@ import {
   QueryReduceRequest,
   QueryReduceResponse,
 } from '../../types/file-reduction.types';
-import { log } from 'console';
+import { DetectionTaskStatus } from '../../types/file-detection.types';
+import { QuotaModel } from '../../models/quota.model';
+import { QuotaType, QuotaChangeType } from '../../types/member.types';
 
 export class AigcFileReductionService {
   private httpClient;
+  private detectionHttpClient;
   private reductionRepo: FileReductionRepository;
+  private detectionRepo: FileDetectionRepository;
+  private quotaModel: QuotaModel;
 
   constructor() {
     this.httpClient = createHttpClient(
       aigcFileConfig.reduceUrl,
       aigcFileConfig.timeout
     );
+    this.detectionHttpClient = createHttpClient(
+      aigcFileConfig.apiUrl,
+      aigcFileConfig.timeout
+    );
     this.reductionRepo = new FileReductionRepository();
+    this.detectionRepo = new FileDetectionRepository();
+    this.quotaModel = new QuotaModel();
   }
 
   async getReductionHistory(
@@ -60,22 +72,63 @@ export class AigcFileReductionService {
         taskId: params.taskId,
         userId: params.userId,
         title: params.title,
+        wordCount: params.wordCount,
         timestamp: new Date().toISOString(),
       });
 
-      // Create reduction task record
-      const task = await this.reductionRepo.createReductionTask({
+      // Record quota usage before making the API call
+      const quotaParams = {
+        user_id: params.userId,
+        quota_type: QuotaType.REWRITE,
+        change_type: QuotaChangeType.CONSUME,
+        change_amount: params.wordCount,
+        remark: `降重任务：${params.title}`
+      };
+      logger.info('Creating quota record with params:', quotaParams);
+      await this.quotaModel.createQuotaRecord(quotaParams);
+
+      // First submit detection task
+      const detectionResponse = await this.detectionHttpClient.post(
+        '/external/aigc-task/post',
+        {
+          key: aigcFileConfig.platformKey,
+          ...params,
+          userId: 123456,
+          ...aigcFileConfig.defaultParams,
+        },
+        {
+          headers: { key: aigcFileConfig.apiKey },
+        }
+      );
+
+      if (detectionResponse.data.status !== '200') {
+        throw new Error(detectionResponse.data.message || 'Failed to submit detection');
+      }
+
+      // Create detection task record
+      const detectionTask = await this.detectionRepo.createDetectionTask({
         userId: params.userId,
         title: params.title,
         wordCount: params.wordCount,
-        detectionId: params.taskId,
+        sourceFileUrl: params.sourceFileUrl,
+        sourceFileType: params.sourceFileType,
+        f_third_task_id: detectionResponse.data.body,
+        f_status: DetectionTaskStatus.SUBMITTED,
       });
 
-      // Submit to third-party service
-      const response = await this.httpClient.post(
+      // Create reduction task record
+      const reductionTask = await this.reductionRepo.createReductionTask({
+        userId: params.userId,
+        title: params.title,
+        wordCount: params.wordCount,
+        detectionId: detectionResponse.data.body,
+      });
+
+      // Submit reduction to third-party service
+      const reductionResponse = await this.httpClient.post(
         `/port/submit/v1.html?key=${aigcFileConfig.reduceApiKey}`,
         {
-          report: params.taskId,
+          report: detectionResponse.data.body,
           sign: aigcFileConfig.reducePlatformKey,
           jcType: aigcFileConfig.reduce.type,
           reportKind: aigcFileConfig.reduce.reportKind,
@@ -89,21 +142,21 @@ export class AigcFileReductionService {
         }
       );
 
-      if (response.data.code !== '0' && response.data.code !== 0) {
-        await this.reductionRepo.updateTask(task.f_id, {
+      if (reductionResponse.data.code !== '0' && reductionResponse.data.code !== 0) {
+        await this.reductionRepo.updateTask(reductionTask.f_id, {
           f_status: ReduceTaskStatus.FAILED,
-          f_error_msg: response.data.msg || 'Failed to submit reduction',
+          f_error_msg: reductionResponse.data.msg || 'Failed to submit reduction',
         });
-        throw new Error(response.data.msg || 'Failed to submit reduction');
+        throw new Error(reductionResponse.data.msg || 'Failed to submit reduction');
       }
 
-      // Update task with third-party task ID
-      await this.reductionRepo.updateTask(task.f_id, {
+      // Update reduction task with third-party task ID
+      await this.reductionRepo.updateTask(reductionTask.f_id, {
         f_status: ReduceTaskStatus.PENDING,
-        f_third_task_id: task.f_detection_id,
+        f_third_task_id: detectionResponse.data.body,
       });
 
-      return { taskId: task.f_detection_id};
+      return { taskId: detectionResponse.data.body };
     } catch (error) {
       logger.error(error);
       logger.error('Failed to submit reduction:', error);
